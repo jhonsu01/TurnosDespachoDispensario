@@ -135,6 +135,38 @@ async function main() {
     assert.strictEqual(doble.status, 400);
     console.log('✓ anti doble entrega');
 
+    // 10b. Toda entrega exige fórmula: turno sin fórmula es rechazado
+    const turno2 = await api('/api/turnos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo_documento: 'CC', numero_documento: '40389928' }),
+    });
+    const sinFormula = await api('/api/entregas', {
+      method: 'POST',
+      body: JSON.stringify({ turno_id: turno2.data.id, items: [{ medicamento_id: losartan.id, cantidad: 1 }] }),
+    });
+    assert.strictEqual(sinFormula.status, 400);
+    assert.ok(/f[oó]rmula/i.test(sinFormula.data.error), 'error debe exigir fórmula');
+    console.log('✓ entrega sin fórmula rechazada');
+
+    // 10c. Fórmula multipágina (PDF renderizado): guarda todas las páginas
+    const pagina = Buffer.from('y'.repeat(400)).toString('base64');
+    const fMulti = await api('/api/formulas', {
+      method: 'POST',
+      body: JSON.stringify({ turno_id: turno2.data.id, imagenes_base64: [pagina, pagina, pagina] }),
+    });
+    assert.strictEqual(fMulti.status, 201);
+    const formulas2 = await api(`/api/formulas/${turno2.data.id}`);
+    assert.strictEqual(formulas2.data[0].num_paginas, 3, 'fórmula de 3 páginas');
+    console.log('✓ fórmula multipágina (PDF)');
+
+    // 10d. Rol inventario reconocido en emparejamiento (PIN inválido → 401, no 400)
+    const inv = await api('/api/emparejar', {
+      method: 'POST',
+      body: JSON.stringify({ rol: 'inventario', pin: '000000', nombre: 'test' }),
+    });
+    assert.strictEqual(inv.status, 401, 'rol inventario existe (rechaza por PIN, no por rol)');
+    console.log('✓ rol inventario disponible');
+
     // 11. Paciente finaliza y consulta historial
     const fin = await api(`/api/turnos/${turno.data.id}/finalizar`, { method: 'POST' });
     assert.strictEqual(fin.data.estado, 'FINALIZADO');
@@ -145,7 +177,7 @@ async function main() {
 
     // 12. Dashboard y auditoría
     const dash = await api('/api/dashboard');
-    assert.strictEqual(dash.data.turnos_hoy, 1);
+    assert.strictEqual(dash.data.turnos_hoy, 2);
     assert.strictEqual(dash.data.atendidos, 1);
     const audit = await api('/api/auditoria');
     assert.ok(audit.data.some(a => a.accion === 'ENTREGA'), 'entrega auditada');

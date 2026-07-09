@@ -54,8 +54,8 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Compilar APK debug
+      - name: Compilar APKs debug (staff + paciente)
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleStaffDebug assemblePacienteDebug --no-daemon

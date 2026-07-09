@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS entregas (
 CREATE TABLE IF NOT EXISTS dispositivos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   token TEXT NOT NULL UNIQUE,
-  rol TEXT NOT NULL CHECK (rol IN ('despachador','admin','kiosko')),
+  rol TEXT NOT NULL CHECK (rol IN ('despachador','admin','kiosko','inventario')),
   nombre TEXT,
   creado TEXT NOT NULL,
   ultimo_acceso TEXT,
@@ -136,10 +136,32 @@ class Db {
       : new SQL.Database();
     const db = new Db(sqlDb, filePath);
     db._db.run(SCHEMA);
+    db._migrar();
     db._seed();
     db.save();
     fs.mkdirSync(db.dirFormulas, { recursive: true });
     return db;
+  }
+
+  /** Migraciones para bases creadas por versiones anteriores. */
+  _migrar() {
+    // v0.2.0: el CHECK de dispositivos.rol debe aceptar 'inventario'
+    const def = this.query(
+      `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dispositivos'`)[0];
+    if (def && !def.sql.includes('inventario')) {
+      this.run('ALTER TABLE dispositivos RENAME TO dispositivos_old');
+      this.run(`CREATE TABLE dispositivos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        rol TEXT NOT NULL CHECK (rol IN ('despachador','admin','kiosko','inventario')),
+        nombre TEXT,
+        creado TEXT NOT NULL,
+        ultimo_acceso TEXT,
+        activo INTEGER NOT NULL DEFAULT 1
+      )`);
+      this.run(`INSERT INTO dispositivos SELECT * FROM dispositivos_old`);
+      this.run('DROP TABLE dispositivos_old');
+    }
   }
 
   _seed() {
@@ -430,20 +452,47 @@ class Db {
   }
 
   // ---- Fórmulas médicas ----
-  crearFormula(turno_id, imagenBase64) {
-    const buffer = Buffer.from(imagenBase64, 'base64');
-    const ruta = path.join(this.dirFormulas, `formula-${turno_id}-${Date.now()}.jpg`);
-    fs.writeFileSync(ruta, buffer);
+  /**
+   * Guarda una fórmula de una o varias páginas (los PDF llegan como una imagen
+   * por página). imagen_ruta almacena un JSON array de rutas.
+   */
+  crearFormula(turno_id, imagenesBase64) {
+    const paginas = Array.isArray(imagenesBase64) ? imagenesBase64 : [imagenesBase64];
+    const base = Date.now();
+    const rutas = paginas.map((b64, i) => {
+      const ruta = path.join(this.dirFormulas, `formula-${turno_id}-${base}-p${i + 1}.jpg`);
+      fs.writeFileSync(ruta, Buffer.from(b64, 'base64'));
+      return ruta;
+    });
     this.run('INSERT INTO formulas (turno_id, imagen_ruta, fecha) VALUES (?, ?, ?)',
-      [turno_id, ruta, new Date().toISOString()]);
+      [turno_id, JSON.stringify(rutas), new Date().toISOString()]);
     this.save();
     return this.query('SELECT id, turno_id, ocr_estado, fecha FROM formulas ORDER BY id DESC LIMIT 1')[0];
   }
 
+  /** Rutas de las páginas de una fórmula (compatible con fórmulas v0.1 de una ruta). */
+  rutasFormula(f) {
+    if (!f) return [];
+    try {
+      const arr = JSON.parse(f.imagen_ruta);
+      return Array.isArray(arr) ? arr : [f.imagen_ruta];
+    } catch (e) {
+      return [f.imagen_ruta];
+    }
+  }
+
   getFormulas(turno_id) {
     return this.query(
-      'SELECT id, turno_id, ocr_estado, ocr_json, ocr_error, fecha FROM formulas WHERE turno_id = ? ORDER BY id DESC',
-      [turno_id]);
+      'SELECT * FROM formulas WHERE turno_id = ? ORDER BY id DESC', [turno_id]
+    ).map(f => ({
+      id: f.id,
+      turno_id: f.turno_id,
+      ocr_estado: f.ocr_estado,
+      ocr_json: f.ocr_json,
+      ocr_error: f.ocr_error,
+      fecha: f.fecha,
+      num_paginas: this.rutasFormula(f).length,
+    }));
   }
 
   getFormula(id) {
@@ -474,6 +523,12 @@ class Db {
       throw new Error('Este turno ya tiene una entrega registrada');
     }
     if (!Array.isArray(items) || !items.length) throw new Error('La entrega no tiene medicamentos');
+    // Política del dispensario: toda entrega requiere fórmula médica adjunta
+    const numFormulas = this.query(
+      'SELECT COUNT(*) AS c FROM formulas WHERE turno_id = ?', [turno_id])[0].c;
+    if (numFormulas === 0) {
+      throw new Error('No se puede despachar sin fórmula médica. Adjunta la fórmula (foto o PDF) antes de confirmar.');
+    }
 
     // Validación previa: si algún ítem no tiene stock se aborta sin descontar nada
     for (const it of items) {

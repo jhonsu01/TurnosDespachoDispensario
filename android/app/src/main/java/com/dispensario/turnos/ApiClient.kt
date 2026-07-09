@@ -93,10 +93,13 @@ class ApiClient(private val host: String, private val puerto: Int, private val t
     fun finalizarTurno(id: Long): JSONObject =
         JSONObject(enviar("/api/turnos/$id/finalizar", "POST", null))
 
-    /** Sube la foto de la fórmula en base64 (puede tardar en redes lentas). */
-    fun subirFormula(turnoId: Long, imagenBase64: String): JSONObject =
-        JSONObject(enviar("/api/formulas", "POST",
-            JSONObject().put("turno_id", turnoId).put("imagen_base64", imagenBase64), 30000))
+    /** Sube la fórmula: una o varias páginas en base64 (los PDF llegan como una página por hoja). */
+    fun subirFormula(turnoId: Long, paginasBase64: List<String>): JSONObject {
+        val arr = JSONArray()
+        paginasBase64.forEach { arr.put(it) }
+        return JSONObject(enviar("/api/formulas", "POST",
+            JSONObject().put("turno_id", turnoId).put("imagenes_base64", arr), 60000))
+    }
 
     fun formulas(turnoId: Long): JSONArray = getArray("/api/formulas/$turnoId")
 
@@ -126,6 +129,20 @@ class ApiClient(private val host: String, private val puerto: Int, private val t
 
     fun historial(tipoDoc: String, numeroDoc: String): JSONArray =
         getArray("/api/historial?tipo_documento=$tipoDoc&numero_documento=$numeroDoc")
+
+    fun medicamentos(): JSONArray = getArray("/api/medicamentos")
+
+    fun crearMedicamento(codigo: String, nombre: String, principio: String,
+                         concentracion: String, presentacion: String, laboratorio: String): JSONObject =
+        JSONObject(enviar("/api/medicamentos", "POST", JSONObject()
+            .put("codigo", codigo).put("nombre", nombre).put("principio_activo", principio)
+            .put("concentracion", concentracion).put("presentacion", presentacion)
+            .put("laboratorio", laboratorio)))
+
+    fun crearLote(medicamentoId: Long, lote: String, cantidad: Int, vencimiento: String): JSONObject =
+        JSONObject(enviar("/api/inventario", "POST", JSONObject()
+            .put("medicamento_id", medicamentoId).put("lote", lote)
+            .put("cantidad", cantidad).put("fecha_vencimiento", vencimiento)))
 }
 
 class ApiException(val codigo: Int, mensaje: String) : Exception(mensaje)

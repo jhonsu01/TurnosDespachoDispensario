@@ -7,7 +7,10 @@
 const https = require('https');
 
 const PROMPT = `Eres un sistema OCR de fórmulas médicas de un dispensario.
-Analiza la imagen de la fórmula médica y extrae TODOS los medicamentos prescritos.
+Analiza la(s) imagen(es) adjuntas. Pueden ser varias páginas de un mismo documento
+(por ejemplo un PDF con historia clínica + fórmula): IGNORA las páginas de historia
+clínica, evoluciones, laboratorios o notas, y extrae los medicamentos SOLO de la(s)
+página(s) que correspondan a la fórmula médica / prescripción.
 Interpreta abreviaturas médicas comunes (tab=tableta, cap=cápsula, jbe=jarabe, amp=ampolla, c/8h, etc.).
 Responde ÚNICAMENTE un JSON válido con esta estructura exacta:
 {"medicamentos":[{"nombre":"...","concentracion":"...","presentacion":"...","cantidad":30}],"observaciones":"..."}
@@ -18,7 +21,7 @@ Responde ÚNICAMENTE un JSON válido con esta estructura exacta:
 - "observaciones": dudas de lectura o texto ilegible.
 Si la imagen no es una fórmula médica, devuelve {"medicamentos":[],"observaciones":"No parece una fórmula médica"}.`;
 
-function llamarOpenAi(apiKey, modelo, imagenBase64) {
+function llamarOpenAi(apiKey, modelo, imagenesBase64) {
   const payload = JSON.stringify({
     model: modelo || 'gpt-4o-mini',
     temperature: 0,
@@ -28,7 +31,10 @@ function llamarOpenAi(apiKey, modelo, imagenBase64) {
       role: 'user',
       content: [
         { type: 'text', text: PROMPT },
-        { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imagenBase64}`, detail: 'high' } },
+        ...imagenesBase64.map(b64 => ({
+          type: 'image_url',
+          image_url: { url: `data:image/jpeg;base64,${b64}`, detail: 'high' },
+        })),
       ],
     }],
   });
@@ -70,11 +76,12 @@ function llamarOpenAi(apiKey, modelo, imagenBase64) {
  * Procesa una fórmula: llama a OpenAI Vision y normaliza el resultado.
  * Lanza Error con mensaje claro si no hay API key o la respuesta es inválida.
  */
-async function procesarFormula({ apiKey, modelo, imagenBase64 }) {
+async function procesarFormula({ apiKey, modelo, imagenBase64, imagenesBase64 }) {
   if (!apiKey) {
     throw new Error('No hay API key de OpenAI configurada. Ve a Configuración → OCR con IA.');
   }
-  const contenido = await llamarOpenAi(apiKey, modelo, imagenBase64);
+  const paginas = imagenesBase64 || [imagenBase64];
+  const contenido = await llamarOpenAi(apiKey, modelo, paginas.slice(0, 8));
   let json;
   try {
     json = JSON.parse(contenido);

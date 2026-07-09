@@ -75,7 +75,7 @@ jobs:
           mkdir -p android/keystore
           echo "$KEYSTORE_B64" | base64 -d > android/keystore/dispensario.keystore
 
-      - name: Compilar APK release
+      - name: Compilar APKs release (staff + paciente)
         working-directory: android
         env:
           ANDROID_KEYSTORE_FILE: ../keystore/dispensario.keystore
@@ -84,12 +84,13 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew assembleStaffRelease assemblePacienteRelease --no-daemon
 
-      - name: Renombrar APK con el tag
+      - name: Renombrar APKs con el tag
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          cp android/app/build/outputs/apk/release/app-release.apk "TurnosDispensario-${TAG}.apk"
+          cp android/app/build/outputs/apk/staff/release/app-staff-release.apk "TurnosDispensario-${TAG}.apk"
+          cp android/app/build/outputs/apk/paciente/release/app-paciente-release.apk "TurnosDispensario-Paciente-${TAG}.apk"
 
       - uses: actions/upload-artifact@v4
         with:

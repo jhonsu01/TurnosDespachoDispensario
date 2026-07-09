@@ -148,7 +148,13 @@
     <div class="card">
       <b>Agregar medicamento</b>
       <div class="form-grid" style="margin-top:.8rem;">
-        <div class="campo"><label>Código</label><input id="nmed-codigo" placeholder="MED-011"></div>
+        <div class="campo"><label>Código (o código de barras)</label>
+          <div style="display:flex;gap:.4rem;">
+            <input id="nmed-codigo" placeholder="MED-011 o EAN" style="flex:1;">
+            <button class="accion" title="Escanear código de barras con la cámara"
+              onclick="abrirEscaner(v => $('nmed-codigo').value = v)">📷</button>
+          </div>
+        </div>
         <div class="campo"><label>Nombre</label><input id="nmed-nombre" placeholder="Losartán"></div>
         <div class="campo"><label>Principio activo</label><input id="nmed-principio" placeholder="Losartán potásico"></div>
         <div class="campo"><label>Concentración</label><input id="nmed-conc" placeholder="50mg"></div>
@@ -276,11 +282,15 @@
       <tbody id="desp-items"></tbody>
     </table>
     <div style="margin-top:.6rem;display:flex;gap:.5rem;align-items:end;flex-wrap:wrap;">
-      <div class="campo" style="flex:1;min-width:220px;"><label>Agregar medicamento manualmente</label>
+      <div class="campo" style="flex:2;min-width:240px;"><label>🔍 Buscar medicamento (nombre, principio activo o código)</label>
+        <input id="desp-buscar" placeholder="Ej: losartan, paracetamol, MED-003…" autocomplete="off"
+          oninput="buscarMedDespacho()"></div>
+      <div class="campo" style="flex:1;min-width:200px;"><label>o elige de la lista</label>
         <select id="desp-agregar-med"></select></div>
-      <div class="campo" style="width:110px;"><label>Cantidad</label><input id="desp-agregar-cant" type="number" min="1" value="1"></div>
+      <div class="campo" style="width:100px;"><label>Cantidad</label><input id="desp-agregar-cant" type="number" min="1" value="1"></div>
       <button class="accion" onclick="agregarItemManual()">+ Agregar</button>
     </div>
+    <div id="desp-resultados" style="display:flex;flex-direction:column;gap:.25rem;margin-top:.4rem;"></div>
     <div class="fila-acciones">
       <button class="accion" onclick="cerrarModal('modal-despacho')">Cerrar</button>
       <button class="accion primario" onclick="confirmarEntrega()">✅ Confirmar entrega</button>
@@ -314,6 +324,17 @@
   </div>
 </div>
 
+<!-- Modal escáner de código de barras (cámara del PC) -->
+<div class="modal-fondo" id="modal-escaner">
+  <div class="modal">
+    <h3>📷 Escanear código de barras</h3>
+    <div class="campo"><label>Cámara</label><select id="escaner-cam"><option value="">Cámara predeterminada</option></select></div>
+    <video id="escaner-video" muted autoplay playsinline style="width:100%;border-radius:8px;margin-top:.6rem;background:#000;"></video>
+    <p class="hint" id="escaner-msg">Apunta la cámara al código de barras…</p>
+    <div class="fila-acciones"><button class="accion" onclick="cerrarEscaner()">Cerrar</button></div>
+  </div>
+</div>
+
 <!-- Modal nuevo turno -->
 <div class="modal-fondo" id="modal-nuevo">
   <div class="modal">
@@ -333,6 +354,7 @@
   </div>
 </div>
 
+<script src="/zxing.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(3, '0');
@@ -522,9 +544,11 @@ async function pintarFormulas(turnoId) {
     } else {
       ocr = `<button class="accion primario" onclick="ejecutarOcr(${f.id})">🤖 Leer fórmula con IA (OCR)</button>`;
     }
+    const paginas = Array.from({ length: f.num_paginas || 1 }, (_, i) =>
+      `<img class="formula" src="/api/formulas/${f.id}/imagen?pagina=${i + 1}" loading="lazy" style="margin-top:.5rem;">`).join('');
     return `<div style="margin-bottom:.8rem;">
-      <details><summary style="cursor:pointer;">📄 Fórmula del ${fechaHora(f.fecha)} — ver imagen</summary>
-        <img class="formula" src="/api/formulas/${f.id}/imagen" loading="lazy" style="margin-top:.5rem;">
+      <details><summary style="cursor:pointer;">📄 Fórmula del ${fechaHora(f.fecha)} — ver ${f.num_paginas > 1 ? f.num_paginas + ' páginas' : 'imagen'}</summary>
+        ${paginas}
       </details>
       ${ocr}
     </div>`;
@@ -576,19 +600,90 @@ function pintarItemsDespacho() {
   </tr>`).join('') : '<tr><td colspan="5">Sin medicamentos aún. Usa el OCR o agrégalos manualmente.</td></tr>';
 }
 
-function agregarItemManual() {
-  const id = Number($('desp-agregar-med').value);
-  const m = medicamentos.find(x => x.id === id);
-  if (!m) return;
+function agregarMedicamentoAlDespacho(m, cantidad) {
   despachoItems.push({
     medicamento_id: m.id,
     etiqueta: `${m.nombre} ${m.concentracion} (${m.presentacion})`,
     stock: m.stock,
-    cantidad: Number($('desp-agregar-cant').value) || 1,
+    cantidad: cantidad || 1,
     solicitado: '(manual)',
     disponible: true,
   });
   pintarItemsDespacho();
+}
+
+function agregarItemManual() {
+  const m = medicamentos.find(x => x.id === Number($('desp-agregar-med').value));
+  if (!m) return;
+  agregarMedicamentoAlDespacho(m, Number($('desp-agregar-cant').value) || 1);
+}
+
+// Normaliza sin tildes para el buscador de medicamentos
+const sinTildes = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+function buscarMedDespacho() {
+  const q = sinTildes($('desp-buscar').value.trim());
+  const cont = $('desp-resultados');
+  if (q.length < 2) { cont.innerHTML = ''; return; }
+  const resultados = medicamentos.filter(m =>
+    sinTildes(m.nombre).includes(q) ||
+    sinTildes(m.principio_activo).includes(q) ||
+    sinTildes(m.codigo).includes(q)
+  ).slice(0, 8);
+  cont.innerHTML = resultados.length ? resultados.map(m =>
+    `<button class="accion" style="text-align:left;" onclick='agregarDesdeBusqueda(${m.id})'>
+      ➕ <b>${m.nombre} ${m.concentracion}</b> (${m.presentacion}) · ${m.codigo} · stock ${m.stock}
+    </button>`).join('') :
+    '<span class="hint">Sin coincidencias en el catálogo.</span>';
+}
+
+function agregarDesdeBusqueda(id) {
+  const m = medicamentos.find(x => x.id === id);
+  if (!m) return;
+  agregarMedicamentoAlDespacho(m, Number($('desp-agregar-cant').value) || 1);
+  $('desp-buscar').value = '';
+  $('desp-resultados').innerHTML = '';
+}
+
+// ---- Escáner de código de barras (reciclado de SeguimientoPrecios: ZXing sobre <video>) ----
+let escanerReader = null;
+let escanerCallback = null;
+
+async function abrirEscaner(onResult) {
+  if (typeof ZXing === 'undefined') return alert('La librería de escaneo no está disponible.');
+  escanerCallback = onResult;
+  $('modal-escaner').classList.add('abierto');
+  $('escaner-msg').textContent = 'Apunta la cámara al código de barras…';
+  const iniciar = (deviceId) => {
+    try {
+      if (escanerReader) { try { escanerReader.reset(); } catch (e) {} }
+      escanerReader = new ZXing.BrowserMultiFormatReader();
+      escanerReader.decodeFromVideoDevice(deviceId || undefined, 'escaner-video', (result) => {
+        if (result) {
+          const texto = result.getText();
+          cerrarEscaner();
+          if (escanerCallback) escanerCallback(texto);
+        }
+      });
+    } catch (e) {
+      $('escaner-msg').textContent = 'No se pudo iniciar la cámara: ' + (e.message || e);
+    }
+  };
+  iniciar(null);
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d => d.kind === 'videoinput');
+    const sel = $('escaner-cam');
+    if (cams.length) {
+      sel.innerHTML = cams.map((c, i) => `<option value="${c.deviceId}">${c.label || ('Cámara ' + (i + 1))}</option>`).join('');
+      sel.onchange = () => iniciar(sel.value);
+    }
+  } catch (e) { /* enumerateDevices no disponible */ }
+}
+
+function cerrarEscaner() {
+  if (escanerReader) { try { escanerReader.reset(); } catch (e) {} escanerReader = null; }
+  $('modal-escaner').classList.remove('abierto');
 }
 
 async function confirmarEntrega() {

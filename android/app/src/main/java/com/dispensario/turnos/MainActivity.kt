@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -27,6 +28,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import org.json.JSONArray
@@ -55,6 +57,11 @@ class MainActivity : AppCompatActivity() {
     private var turnoDespachoId: Long = -1
     private var formulaActualId: Long = -1
     private var itemsEntrega: JSONArray = JSONArray()
+    private var etiquetasEntrega = mutableListOf<String>()
+    private var catalogoMeds: JSONArray = JSONArray()
+
+    /** A qué turno se sube la próxima fórmula (el del paciente o el que atiende el despachador). */
+    private var turnoParaFormula: Long = -1
 
     private var tareaPeriodica: Runnable? = null
     private var reintento: Runnable? = null
@@ -65,6 +72,10 @@ class MainActivity : AppCompatActivity() {
 
     private val elegirImagen = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) subirFormulaDesdeUri(uri)
+    }
+
+    private val elegirPdf = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) subirFormulaDesdePdf(uri)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         // Selección de rol
         findViewById<Button>(R.id.btnRolPaciente).setOnClickListener { elegirRol("paciente") }
         findViewById<Button>(R.id.btnRolDespachador).setOnClickListener { elegirRol("despachador") }
+        findViewById<Button>(R.id.btnRolInventario).setOnClickListener { elegirRol("inventario") }
         findViewById<Button>(R.id.btnRolKiosko).setOnClickListener { elegirRol("kiosko") }
 
         // Conexión
@@ -89,18 +101,42 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnSolicitar).setOnClickListener { solicitarTurno() }
         findViewById<Button>(R.id.btnHistorial).setOnClickListener { mostrarHistorial() }
         findViewById<Button>(R.id.btnNuevoTurno).setOnClickListener { terminarTurnoCliente() }
-        findViewById<Button>(R.id.btnFormulaCamara).setOnClickListener { abrirCamara() }
-        findViewById<Button>(R.id.btnFormulaGaleria).setOnClickListener { elegirImagen.launch("image/*") }
+        findViewById<Button>(R.id.btnFormulaCamara).setOnClickListener { turnoParaFormula = turnoActivo; abrirCamara() }
+        findViewById<Button>(R.id.btnFormulaGaleria).setOnClickListener { turnoParaFormula = turnoActivo; elegirImagen.launch("image/*") }
+        findViewById<Button>(R.id.btnFormulaPdf).setOnClickListener { turnoParaFormula = turnoActivo; elegirPdf.launch("application/pdf") }
 
         // Despachador
         findViewById<Button>(R.id.btnOcr).setOnClickListener { ejecutarOcr() }
         findViewById<Button>(R.id.btnEntregar).setOnClickListener { confirmarEntrega() }
         findViewById<Button>(R.id.btnVolverLista).setOnClickListener { entrarDespacho() }
+        findViewById<Button>(R.id.btnDespachoCamara).setOnClickListener { turnoParaFormula = turnoDespachoId; abrirCamara() }
+        findViewById<Button>(R.id.btnDespachoGaleria).setOnClickListener { turnoParaFormula = turnoDespachoId; elegirImagen.launch("image/*") }
+        findViewById<Button>(R.id.btnDespachoPdf).setOnClickListener { turnoParaFormula = turnoDespachoId; elegirPdf.launch("application/pdf") }
+        findViewById<EditText>(R.id.inputBuscarMed).addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) { buscarMedicamentoDespacho() }
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
+
+        // Inventario
+        findViewById<Button>(R.id.btnAgregarMedicamento).setOnClickListener { dialogoNuevoMedicamento() }
+        findViewById<EditText>(R.id.inputBuscarInv).addTextChangedListener(object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) { pintarInventario() }
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+        })
 
         // Cambiar rol / servidor
         val reset = View.OnClickListener { cambiarRol() }
         findViewById<Button>(R.id.btnCambiarServidor).setOnClickListener(reset)
         findViewById<Button>(R.id.btnCambiarRolDespacho).setOnClickListener(reset)
+        findViewById<Button>(R.id.btnCambiarRolInventario).setOnClickListener(reset)
+
+        // APK Paciente: sin selección de roles, siempre entra como paciente
+        if (BuildConfig.SOLO_PACIENTE) {
+            findViewById<Button>(R.id.btnCambiarServidor).text = "Cambiar servidor"
+            findViewById<Button>(R.id.btnVolverRol).visibility = View.GONE
+        }
 
         restaurarSesion()
     }
@@ -126,13 +162,23 @@ class MainActivity : AppCompatActivity() {
         detenerPeriodica()
         val vistas = listOf(
             R.id.vistaRol, R.id.vistaConfig, R.id.vistaRegistro, R.id.vistaTurno,
-            R.id.vistaDespacho, R.id.vistaDespachoDetalle,
+            R.id.vistaDespacho, R.id.vistaDespachoDetalle, R.id.vistaInventario,
         )
         for (v in vistas) findViewById<View>(v).visibility = if (v == id) View.VISIBLE else View.GONE
     }
 
     private fun estadoConexion(texto: String) {
         findViewById<TextView>(R.id.txtEstadoConexion).text = texto
+    }
+
+    /**
+     * Estado de conexión del paciente: sin IP ni datos técnicos,
+     * solo "Servidor" y un indicador de conectado/desconectado.
+     */
+    private fun conexionPaciente(conectado: Boolean) {
+        val txt = findViewById<TextView>(R.id.txtEstadoConexion)
+        txt.text = if (conectado) "Servidor  🟢 Conectado" else "Servidor  🔴 Sin conexión"
+        txt.setTextColor(getColor(if (conectado) R.color.verde else R.color.rojo))
     }
 
     private fun detenerPeriodica() {
@@ -155,23 +201,24 @@ class MainActivity : AppCompatActivity() {
     private fun cambiarRol() {
         prefs.edit().remove("rol").remove("turno_id").apply()
         rolElegido = null
-        mostrarVista(R.id.vistaRol)
+        if (BuildConfig.SOLO_PACIENTE) elegirRol("paciente") else mostrarVista(R.id.vistaRol)
     }
 
     private fun restaurarSesion() {
-        val rol = prefs.getString("rol", null)
+        val rol = if (BuildConfig.SOLO_PACIENTE) "paciente" else prefs.getString("rol", null)
         val host = prefs.getString("host", null)
         if (rol == null || host == null) {
-            mostrarVista(R.id.vistaRol)
+            if (BuildConfig.SOLO_PACIENTE) elegirRol("paciente") else mostrarVista(R.id.vistaRol)
             return
         }
         rolElegido = rol
         val cliente = ApiClient(host, prefs.getInt("puerto", 3000), prefs.getString("token", "") ?: "")
         api = cliente
-        estadoConexion("Servidor: $host:${prefs.getInt("puerto", 3000)} · rol: $rol")
+        if (rol == "paciente") conexionPaciente(true)
+        else estadoConexion("Servidor: $host:${prefs.getInt("puerto", 3000)} · rol: $rol")
 
         // Roles elevados: verificar que el acceso no haya sido revocado desde el panel
-        if (rol in listOf("despachador", "kiosko")) {
+        if (rol in listOf("despachador", "kiosko", "inventario")) {
             io.execute {
                 val vigente = try {
                     val info = cliente.ping()
@@ -187,6 +234,7 @@ class MainActivity : AppCompatActivity() {
                         when (rol) {
                             "kiosko" -> startActivity(Intent(this, KioskActivity::class.java))
                             "despachador" -> entrarDespacho()
+                            "inventario" -> entrarInventario()
                         }
                     }
                 }
@@ -216,6 +264,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<EditText>(R.id.inputPin).hint = when (rol) {
             "despachador" -> "PIN de sesión — Despachador (ver panel del PC)"
             "kiosko" -> "PIN de sesión — Kiosko (ver panel del PC)"
+            "inventario" -> "PIN de sesión — Inventario (ver panel del PC)"
             else -> ""
         }
         buscarServidor()
@@ -262,7 +311,7 @@ class MainActivity : AppCompatActivity() {
                         api = cliente
                         prefs.edit().putString("host", host).putInt("puerto", puerto)
                             .remove("token").putString("rol", rol).apply()
-                        estadoConexion("Conectado a ${info.optString("nombre", "servidor")} · rol: paciente")
+                        conexionPaciente(true)
                         mostrarVista(R.id.vistaRegistro)
                     }
                     return@execute
@@ -280,6 +329,7 @@ class MainActivity : AppCompatActivity() {
                     when (rol) {
                         "kiosko" -> elegirPantallaKiosko()
                         "despachador" -> entrarDespacho()
+                        "inventario" -> entrarInventario()
                     }
                 }
             } catch (e: ApiException) {
@@ -371,13 +421,13 @@ class MainActivity : AppCompatActivity() {
                 val t = cliente.turno(turnoActivo)
                 ui.post { pintarTurno(t) }
             } catch (e: Exception) {
-                ui.post { estadoConexion("Sin conexión — reintentando…") }
+                ui.post { conexionPaciente(false) }
             }
         }
     }
 
     private fun pintarTurno(t: JSONObject) {
-        estadoConexion("Servidor: ${prefs.getString("host", "")}:${prefs.getInt("puerto", 3000)} · rol: paciente")
+        conexionPaciente(true)
         val numero = t.getInt("numero")
         val estado = t.getString("estado")
         val modulo = if (t.isNull("modulo_asignado")) null else t.getInt("modulo_asignado")
@@ -398,6 +448,7 @@ class MainActivity : AppCompatActivity() {
         val botonesFormula = estado in listOf("ESPERANDO", "CREADO", "LLAMANDO", "DESPACHO")
         findViewById<Button>(R.id.btnFormulaCamara).visibility = if (botonesFormula) View.VISIBLE else View.GONE
         findViewById<Button>(R.id.btnFormulaGaleria).visibility = if (botonesFormula) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.btnFormulaPdf).visibility = if (botonesFormula) View.VISIBLE else View.GONE
 
         when (estado) {
             "CREADO", "ESPERANDO" -> {
@@ -545,7 +596,7 @@ class MainActivity : AppCompatActivity() {
         io.execute {
             try {
                 val b64 = comprimirABase64(BitmapFactory.decodeFile(archivo.absolutePath))
-                enviarFormula(b64)
+                enviarFormula(listOf(b64))
             } catch (e: Exception) {
                 ui.post { toast("No se pudo procesar la foto: ${e.message}") }
             }
@@ -557,9 +608,47 @@ class MainActivity : AppCompatActivity() {
             try {
                 val bmp = contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it) }
                 val b64 = comprimirABase64(bmp)
-                enviarFormula(b64)
+                enviarFormula(listOf(b64))
             } catch (e: Exception) {
                 ui.post { toast("No se pudo leer la imagen: ${e.message}") }
+            }
+        }
+    }
+
+    /**
+     * Fórmula en PDF: renderiza cada página a imagen (máx. 8) y las sube todas.
+     * Muchos PDF traen la fórmula mezclada con historia clínica: el OCR del
+     * servidor identifica la página de la fórmula e ignora el resto.
+     */
+    private fun subirFormulaDesdePdf(uri: Uri) {
+        io.execute {
+            try {
+                val fd = contentResolver.openFileDescriptor(uri, "r")
+                    ?: throw Exception("No se pudo abrir el PDF")
+                val paginas = mutableListOf<String>()
+                fd.use {
+                    val pdf = PdfRenderer(it)
+                    pdf.use {
+                        val total = minOf(pdf.pageCount, 8)
+                        for (i in 0 until total) {
+                            pdf.openPage(i).use { page ->
+                                // Render a ~150 dpi (los PDF vienen en puntos de 72 dpi)
+                                val escala = 150f / 72f
+                                val ancho = (page.width * escala).toInt().coerceAtMost(1600)
+                                val alto = (page.height * ancho / page.width)
+                                val bmp = Bitmap.createBitmap(ancho, alto, Bitmap.Config.ARGB_8888)
+                                bmp.eraseColor(Color.WHITE)
+                                page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                paginas.add(comprimirABase64(bmp))
+                            }
+                        }
+                    }
+                }
+                if (paginas.isEmpty()) throw Exception("El PDF no tiene páginas")
+                ui.post { toast("PDF de ${paginas.size} página(s) — subiendo…") }
+                enviarFormula(paginas)
+            } catch (e: Exception) {
+                ui.post { toast("No se pudo leer el PDF: ${e.message}") }
             }
         }
     }
@@ -577,15 +666,18 @@ class MainActivity : AppCompatActivity() {
         return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
-    private fun enviarFormula(b64: String) {
+    /** Sube las páginas al turno correspondiente (paciente o despacho). */
+    private fun enviarFormula(paginas: List<String>) {
         val cliente = api ?: return
-        if (turnoActivo <= 0) return
+        val turno = turnoParaFormula
+        if (turno <= 0) return
         ui.post { toast("Subiendo fórmula…") }
         try {
-            cliente.subirFormula(turnoActivo, b64)
+            cliente.subirFormula(turno, paginas)
             ui.post {
                 toast("Fórmula enviada ✓")
-                consultarTurno()
+                if (turno == turnoActivo) consultarTurno()
+                if (turno == turnoDespachoId) recargarFormulaDespacho()
             }
         } catch (e: Exception) {
             ui.post { toast("No se pudo subir la fórmula: ${e.message}") }
@@ -694,6 +786,7 @@ class MainActivity : AppCompatActivity() {
         turnoDespachoId = t.getLong("id")
         formulaActualId = -1
         itemsEntrega = JSONArray()
+        etiquetasEntrega.clear()
         detenerPeriodica()
         mostrarVista(R.id.vistaDespachoDetalle)
         val nombre = t.optString("paciente_nombre", "")
@@ -701,24 +794,39 @@ class MainActivity : AppCompatActivity() {
             "Turno %03d · %s %s%s".format(t.getInt("numero"),
                 t.getString("tipo_documento"), t.getString("numero_documento"),
                 if (nombre.isNotEmpty() && nombre != "null") "\n$nombre" else "")
-        findViewById<TextView>(R.id.txtValidacion).text = "Sin validación aún. Usa el OCR para leer la fórmula."
+        findViewById<TextView>(R.id.txtValidacion).text =
+            "Sin medicamentos aún. Usa el OCR o el buscador de abajo."
         findViewById<ImageView>(R.id.imgFormula).visibility = View.GONE
+        findViewById<EditText>(R.id.inputBuscarMed).setText("")
         val cliente = api ?: return
         io.execute {
-            // Marca el turno EN DESPACHO y carga su fórmula más reciente
+            // Marca el turno EN DESPACHO, precarga el catálogo y la fórmula
             try { if (t.getString("estado") == "LLAMANDO") cliente.setEstado(turnoDespachoId, "DESPACHO", null) } catch (e: Exception) {}
+            try { catalogoMeds = cliente.medicamentos() } catch (e: Exception) {}
+            recargarFormulaDespacho()
+        }
+    }
+
+    /** Consulta la fórmula más reciente del turno en despacho y actualiza la vista. */
+    private fun recargarFormulaDespacho() {
+        val cliente = api ?: return
+        if (turnoDespachoId <= 0) return
+        io.execute {
             try {
                 val formulas = cliente.formulas(turnoDespachoId)
                 ui.post {
                     if (formulas.length() == 0) {
                         findViewById<TextView>(R.id.txtFormulaInfo).text =
-                            "El paciente no adjuntó fórmula. La entrega se registra desde el panel del PC."
+                            "⚠ Sin fórmula adjunta. Toda entrega requiere fórmula: " +
+                            "tómale foto o adjunta la imagen/PDF con los botones de abajo."
                         findViewById<Button>(R.id.btnOcr).isEnabled = false
                     } else {
                         val f = formulas.getJSONObject(0)
                         formulaActualId = f.getLong("id")
+                        val paginas = f.optInt("num_paginas", 1)
                         findViewById<TextView>(R.id.txtFormulaInfo).text =
-                            "📄 Fórmula adjunta (${f.getString("ocr_estado")})"
+                            "📄 Fórmula adjunta (${f.getString("ocr_estado")}" +
+                            (if (paginas > 1) ", $paginas páginas" else "") + ")"
                         findViewById<Button>(R.id.btnOcr).isEnabled = true
                         cargarImagenFormula(formulaActualId)
                     }
@@ -727,6 +835,65 @@ class MainActivity : AppCompatActivity() {
                 ui.post { findViewById<TextView>(R.id.txtFormulaInfo).text = "No se pudo consultar la fórmula." }
             }
         }
+    }
+
+    // ---------- Buscador manual de medicamentos (despacho sin OCR) ----------
+    private fun normalizar(s: String): String =
+        java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "").lowercase().trim()
+
+    private fun buscarMedicamentoDespacho() {
+        val q = normalizar(findViewById<EditText>(R.id.inputBuscarMed).text.toString())
+        val cont = findViewById<LinearLayout>(R.id.resultadosBusqueda)
+        cont.removeAllViews()
+        if (q.length < 2) return
+        var mostrados = 0
+        for (i in 0 until catalogoMeds.length()) {
+            if (mostrados >= 6) break
+            val m = catalogoMeds.getJSONObject(i)
+            val texto = normalizar("${m.getString("nombre")} ${m.getString("principio_activo")} ${m.getString("codigo")}")
+            if (!texto.contains(q)) continue
+            mostrados++
+            val etiqueta = "${m.getString("nombre")} ${m.getString("concentracion")} (${m.getString("presentacion")})"
+            val boton = Button(this)
+            boton.text = "➕ $etiqueta · stock ${m.optInt("stock")}"
+            boton.textSize = 13f
+            boton.isAllCaps = false
+            boton.setBackgroundColor(getColor(R.color.panel))
+            boton.setTextColor(getColor(R.color.texto))
+            boton.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            boton.setOnClickListener { dialogoCantidadItem(m, etiqueta) }
+            cont.addView(boton)
+        }
+    }
+
+    private fun dialogoCantidadItem(m: JSONObject, etiqueta: String) {
+        val input = EditText(this)
+        input.inputType = InputType.TYPE_CLASS_NUMBER
+        input.hint = "Cantidad a entregar"
+        AlertDialog.Builder(this)
+            .setTitle(etiqueta)
+            .setView(input)
+            .setPositiveButton("Agregar") { _, _ ->
+                val cantidad = input.text.toString().toIntOrNull() ?: 1
+                itemsEntrega.put(JSONObject()
+                    .put("medicamento_id", m.getLong("id"))
+                    .put("cantidad", cantidad))
+                etiquetasEntrega.add("$etiqueta x$cantidad")
+                findViewById<EditText>(R.id.inputBuscarMed).setText("")
+                findViewById<LinearLayout>(R.id.resultadosBusqueda).removeAllViews()
+                pintarItemsEntrega()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun pintarItemsEntrega() {
+        val sb = StringBuilder("MEDICAMENTOS A ENTREGAR\n\n")
+        etiquetasEntrega.forEach { sb.append("• $it\n") }
+        sb.append("\n⚠ Verifica contra la fórmula física antes de confirmar.")
+        findViewById<TextView>(R.id.txtValidacion).text = sb.toString()
     }
 
     private fun cargarImagenFormula(formulaId: Long) {
@@ -767,6 +934,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun pintarValidacion(validacion: JSONArray, observaciones: String) {
         itemsEntrega = JSONArray()
+        etiquetasEntrega.clear()
         val sb = StringBuilder("VALIDACIÓN CONTRA INVENTARIO\n\n")
         for (i in 0 until validacion.length()) {
             val v = validacion.getJSONObject(i)
@@ -783,6 +951,7 @@ class MainActivity : AppCompatActivity() {
                     itemsEntrega.put(JSONObject()
                         .put("medicamento_id", v.getLong("medicamento_id"))
                         .put("cantidad", sol.getInt("cantidad")))
+                    etiquetasEntrega.add("${v.getString("medicamento")} x${sol.getInt("cantidad")}")
                 }
             }
         }
@@ -794,8 +963,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun confirmarEntrega() {
         val cliente = api ?: return
+        if (formulaActualId <= 0) {
+            toast("Toda entrega requiere fórmula médica. Adjúntala primero (foto, imagen o PDF).")
+            return
+        }
         if (itemsEntrega.length() == 0) {
-            toast("No hay medicamentos disponibles validados. Usa el OCR primero o registra la entrega desde el panel del PC.")
+            toast("No hay medicamentos en la entrega. Usa el OCR o el buscador para agregarlos.")
             return
         }
         AlertDialog.Builder(this)
@@ -812,6 +985,171 @@ class MainActivity : AppCompatActivity() {
                         }
                     } catch (e: Exception) {
                         ui.post { toast("Error al entregar: ${e.message}") }
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // ---------- ROL INVENTARIO (ALMACENISTA) ----------
+    private fun entrarInventario() {
+        mostrarVista(R.id.vistaInventario)
+        iniciarPeriodica(10000) { refrescarInventario() }
+    }
+
+    private fun refrescarInventario() {
+        val cliente = api ?: return
+        io.execute {
+            try {
+                catalogoMeds = cliente.medicamentos()
+                ui.post {
+                    estadoConexion("Servidor: ${prefs.getString("host", "")} · rol: inventario")
+                    pintarInventario()
+                }
+            } catch (e: Exception) {
+                ui.post { estadoConexion("Sin conexión — reintentando…") }
+            }
+        }
+    }
+
+    private fun pintarInventario() {
+        val q = normalizar(findViewById<EditText>(R.id.inputBuscarInv).text.toString())
+        val cont = findViewById<LinearLayout>(R.id.listaInventario)
+        cont.removeAllViews()
+        for (i in 0 until catalogoMeds.length()) {
+            val m = catalogoMeds.getJSONObject(i)
+            val etiqueta = "${m.getString("nombre")} ${m.getString("concentracion")} (${m.getString("presentacion")})"
+            if (q.length >= 2 && !normalizar("$etiqueta ${m.getString("principio_activo")} ${m.getString("codigo")}").contains(q)) continue
+
+            val tarjeta = LinearLayout(this)
+            tarjeta.orientation = LinearLayout.VERTICAL
+            tarjeta.setBackgroundColor(getColor(R.color.panel))
+            tarjeta.setPadding(28, 20, 28, 20)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            lp.bottomMargin = 12
+            tarjeta.layoutParams = lp
+
+            val titulo = TextView(this)
+            titulo.text = etiqueta
+            titulo.setTextColor(getColor(R.color.texto))
+            titulo.textSize = 15f
+            tarjeta.addView(titulo)
+
+            val stock = m.optInt("stock")
+            val detalle = TextView(this)
+            detalle.text = "${m.getString("codigo")} · stock: $stock"
+            detalle.setTextColor(getColor(if (stock > 0) R.color.verde else R.color.rojo))
+            detalle.textSize = 13f
+            tarjeta.addView(detalle)
+
+            val boton = Button(this)
+            boton.text = "📦 Registrar entrada (lote)"
+            boton.textSize = 13f
+            boton.isAllCaps = false
+            boton.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            boton.setOnClickListener { dialogoNuevoLote(m, etiqueta) }
+            tarjeta.addView(boton)
+            cont.addView(tarjeta)
+        }
+    }
+
+    /** Escáner de código de barras con la cámara (reciclado de SeguimientoPrecios). */
+    private fun escanearCodigo(destino: EditText) {
+        GmsBarcodeScanning.getClient(this).startScan()
+            .addOnSuccessListener { b -> b.rawValue?.let { destino.setText(it) } }
+            .addOnFailureListener { toast("No se pudo iniciar el escáner: ${it.message}") }
+            .addOnCanceledListener { }
+    }
+
+    private fun campoConEscaner(hint: String): Pair<LinearLayout, EditText> {
+        val fila = LinearLayout(this)
+        fila.orientation = LinearLayout.HORIZONTAL
+        val input = EditText(this)
+        input.hint = hint
+        input.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        val botonScan = Button(this)
+        botonScan.text = "📷"
+        botonScan.setOnClickListener { escanearCodigo(input) }
+        fila.addView(input)
+        fila.addView(botonScan)
+        return Pair(fila, input)
+    }
+
+    private fun dialogoNuevoMedicamento() {
+        val cliente = api ?: return
+        val contenedor = LinearLayout(this)
+        contenedor.orientation = LinearLayout.VERTICAL
+        contenedor.setPadding(48, 24, 48, 8)
+        val (filaCodigo, inputCodigo) = campoConEscaner("Código o código de barras *")
+        contenedor.addView(filaCodigo)
+        val inputNombre = EditText(this); inputNombre.hint = "Nombre *"; contenedor.addView(inputNombre)
+        val inputPrincipio = EditText(this); inputPrincipio.hint = "Principio activo"; contenedor.addView(inputPrincipio)
+        val inputConc = EditText(this); inputConc.hint = "Concentración (ej: 50mg) *"; contenedor.addView(inputConc)
+        val inputPres = EditText(this); inputPres.hint = "Presentación (ej: Tableta) *"; contenedor.addView(inputPres)
+        val inputLab = EditText(this); inputLab.hint = "Laboratorio"; contenedor.addView(inputLab)
+
+        AlertDialog.Builder(this)
+            .setTitle("＋ Nuevo medicamento")
+            .setView(contenedor)
+            .setPositiveButton("Guardar") { _, _ ->
+                val codigo = inputCodigo.text.toString().trim()
+                val nombre = inputNombre.text.toString().trim()
+                val conc = inputConc.text.toString().trim()
+                val pres = inputPres.text.toString().trim()
+                if (codigo.isEmpty() || nombre.isEmpty() || conc.isEmpty() || pres.isEmpty()) {
+                    toast("Código, nombre, concentración y presentación son obligatorios")
+                    return@setPositiveButton
+                }
+                io.execute {
+                    try {
+                        cliente.crearMedicamento(codigo, nombre,
+                            inputPrincipio.text.toString().trim().ifEmpty { nombre },
+                            conc, pres, inputLab.text.toString().trim())
+                        ui.post { toast("Medicamento creado ✓"); refrescarInventario() }
+                    } catch (e: Exception) {
+                        ui.post { toast("Error: ${e.message}") }
+                    }
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun dialogoNuevoLote(m: JSONObject, etiqueta: String) {
+        val cliente = api ?: return
+        val contenedor = LinearLayout(this)
+        contenedor.orientation = LinearLayout.VERTICAL
+        contenedor.setPadding(48, 24, 48, 8)
+        val (filaLote, inputLote) = campoConEscaner("Número de lote *")
+        contenedor.addView(filaLote)
+        val inputCantidad = EditText(this)
+        inputCantidad.hint = "Cantidad que entra *"
+        inputCantidad.inputType = InputType.TYPE_CLASS_NUMBER
+        contenedor.addView(inputCantidad)
+        val inputVence = EditText(this)
+        inputVence.hint = "Vencimiento (AAAA-MM-DD) *"
+        contenedor.addView(inputVence)
+
+        AlertDialog.Builder(this)
+            .setTitle("📦 Entrada — $etiqueta")
+            .setView(contenedor)
+            .setPositiveButton("Registrar") { _, _ ->
+                val lote = inputLote.text.toString().trim()
+                val cantidad = inputCantidad.text.toString().toIntOrNull() ?: 0
+                val vence = inputVence.text.toString().trim()
+                if (lote.isEmpty() || cantidad <= 0 || !Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(vence)) {
+                    toast("Lote, cantidad (>0) y vencimiento AAAA-MM-DD son obligatorios")
+                    return@setPositiveButton
+                }
+                io.execute {
+                    try {
+                        cliente.crearLote(m.getLong("id"), lote, cantidad, vence)
+                        ui.post { toast("Entrada registrada ✓"); refrescarInventario() }
+                    } catch (e: Exception) {
+                        ui.post { toast("Error: ${e.message}") }
                     }
                 }
             }

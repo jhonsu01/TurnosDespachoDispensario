@@ -5,7 +5,8 @@ Sistema inteligente de dispensario de medicamentos con turnero, **OCR de fórmul
 | Componente | Tecnología | Entregable |
 | --- | --- | --- |
 | 🖥️ Escritorio (servidor + panel admin) | Electron + Express + WebSocket + SQLite | Instalador **MSI** |
-| 📱 App móvil multirol (paciente / despachador / kiosko) | Android (Kotlin) | **APK** |
+| 📱 App móvil del personal (despachador / inventario / kiosko) | Android (Kotlin) | **APK** (`TurnosDispensario-vX.apk`) |
+| 📱 App del paciente (solo rol paciente) | Android (Kotlin, mismo código) | **APK** (`TurnosDispensario-Paciente-vX.apk`) |
 | 📺 Pantallas informativas | Web en modo oscuro (`/display.html`) con marquesina configurable | Servida por el escritorio |
 | 🎫 Kiosko de autoservicio | Web táctil (`/kiosko.html`) con QR del turno | Servida por el escritorio |
 
@@ -31,9 +32,10 @@ Los instaladores se publican automáticamente en la sección **[Releases](../../
 
 | Rol | Dónde | Emparejamiento | Qué hace |
 | --- | --- | --- | --- |
-| 👤 **Paciente** | App Android | Sin PIN (se identifica con su documento) | Solicita turno (QR + PIN), **fotografía y adjunta su fórmula médica**, vibra al ser llamado, recibe su comprobante y consulta su historial |
-| 💊 **Despachador** | App Android o panel | PIN de sesión → token | Llama turnos al módulo, ve la fórmula, **ejecuta el OCR con IA**, valida contra inventario y confirma la entrega |
-| 🗃 **Almacenista / Administrador** | Panel de escritorio | Solo desde el equipo servidor | Catálogo de medicamentos, entradas de inventario por lote, vencimientos, dashboard, auditoría, configuración e IA |
+| 👤 **Paciente** | APK Paciente (dedicado) | Sin PIN (se identifica con su documento) | Solicita turno (QR + PIN), **adjunta su fórmula (foto, imagen o PDF)**, vibra al ser llamado, recibe su comprobante y consulta su historial. Solo ve "Servidor 🟢/🔴" |
+| 💊 **Despachador** | APK del personal o panel | PIN de sesión → token | Llama turnos, ve/adjunta la fórmula (foto/imagen/PDF), **ejecuta el OCR con IA** o usa el **buscador manual**, y confirma la entrega (siempre con fórmula) |
+| 🗃 **Inventario (almacenista)** | APK del personal o panel | PIN de sesión → token | Alta de medicamentos y entradas de lote con **escáner de código de barras** |
+| 🛡 **Administrador** | Panel de escritorio | Solo desde el equipo servidor | Catálogo, inventario, vencimientos, dashboard, auditoría, configuración e IA |
 | 📺 **Kiosko** | App Android (TV/tablet) o navegador | PIN de sesión → token (una sola vez) | Pantalla del turnero a pantalla completa o punto de autoservicio de turnos |
 
 ## Flujo del sistema

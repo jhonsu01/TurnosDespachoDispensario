@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Turnos Dispensario</string>
+    <!-- app_name lo define cada flavor (staff / paciente) en build.gradle -->
     <string name="titulo_rol">¿Cómo vas a usar este dispositivo?</string>
     <string name="rol_paciente">👤 Paciente\nSolicito mis medicamentos</string>
     <string name="rol_despachador">💊 Despachador\nAtiendo turnos y entrego</string>
@@ -22,6 +22,11 @@
     <string name="btn_historial">🧾 Consultar mis entregas anteriores</string>
     <string name="btn_formula_camara">📷 Fotografiar fórmula</string>
     <string name="btn_formula_galeria">🖼 Adjuntar de la galería</string>
+    <string name="btn_formula_pdf">📄 Adjuntar PDF</string>
+    <string name="rol_inventario">🗃 Inventario\nRegistro medicamentos y lotes</string>
+    <string name="titulo_inventario">Inventario del dispensario</string>
+    <string name="btn_agregar_medicamento">＋ Agregar medicamento</string>
+    <string name="hint_buscar_med">🔍 Buscar medicamento…</string>
     <string name="titulo_despacho">Turnos del dispensario</string>
     <string name="btn_ocr">🤖 Leer fórmula con IA (OCR)</string>
     <string name="btn_entregar">✅ Confirmar entrega</string>

@@ -56,7 +56,7 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
 
   // ---- Seguridad: PINs de sesión + tokens de dispositivo ----
   const generarPin = () => String(Math.floor(100000 + Math.random() * 900000));
-  const pinsSesion = { despachador: generarPin(), admin: generarPin(), kiosko: generarPin() };
+  const pinsSesion = { despachador: generarPin(), admin: generarPin(), kiosko: generarPin(), inventario: generarPin() };
   const regenerarPins = () => {
     for (const rol of Object.keys(pinsSesion)) pinsSesion[rol] = generarPin();
   };
@@ -105,8 +105,8 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
   // Emparejamiento de roles elevados: PIN de sesión -> token persistente
   app.post('/api/emparejar', (req, res) => {
     const { rol, pin, nombre } = req.body || {};
-    if (!['despachador', 'admin', 'kiosko'].includes(rol)) {
-      return res.status(400).json({ error: 'rol debe ser despachador, admin o kiosko' });
+    if (!['despachador', 'admin', 'kiosko', 'inventario'].includes(rol)) {
+      return res.status(400).json({ error: 'rol debe ser despachador, admin, kiosko o inventario' });
     }
     if (String(pin) !== pinsSesion[rol]) {
       return res.status(401).json({ error: 'PIN de emparejamiento incorrecto para ese rol' });
@@ -133,7 +133,7 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
   // ---- Medicamentos ----
   app.get('/api/medicamentos', (_req, res) => res.json(db.getMedicamentos()));
 
-  app.post('/api/medicamentos', conToken(), (req, res) => {
+  app.post('/api/medicamentos', conToken('inventario'), (req, res) => {
     const { codigo, nombre, principio_activo, concentracion, presentacion, laboratorio } = req.body || {};
     if (!codigo || !nombre || !concentracion || !presentacion) {
       return res.status(400).json({ error: 'codigo, nombre, concentracion y presentacion son obligatorios' });
@@ -155,7 +155,7 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
     }
   });
 
-  app.put('/api/medicamentos/:id', conToken(), (req, res) => {
+  app.put('/api/medicamentos/:id', conToken('inventario'), (req, res) => {
     const m = db.updateMedicamento(Number(req.params.id), req.body || {});
     if (!m) return res.status(400).json({ error: 'Nada que actualizar o medicamento inexistente' });
     broadcast('inventario_updated');
@@ -170,9 +170,9 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
   });
 
   // ---- Inventario (lotes) ----
-  app.get('/api/inventario', conToken('despachador'), (_req, res) => res.json(db.getInventario()));
+  app.get('/api/inventario', conToken('despachador', 'inventario'), (_req, res) => res.json(db.getInventario()));
 
-  app.post('/api/inventario', conToken(), (req, res) => {
+  app.post('/api/inventario', conToken('inventario'), (req, res) => {
     const { medicamento_id, lote, cantidad, fecha_vencimiento } = req.body || {};
     if (!medicamento_id || !lote || !(Number(cantidad) > 0) || !/^\d{4}-\d{2}-\d{2}$/.test(String(fecha_vencimiento))) {
       return res.status(400).json({ error: 'medicamento_id, lote, cantidad (>0) y fecha_vencimiento (YYYY-MM-DD) son obligatorios' });
@@ -188,7 +188,7 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
     res.status(201).json(l);
   });
 
-  app.put('/api/inventario/:id', conToken(), (req, res) => {
+  app.put('/api/inventario/:id', conToken('inventario'), (req, res) => {
     const cantidad = Number((req.body || {}).cantidad);
     if (!(cantidad >= 0)) return res.status(400).json({ error: 'cantidad debe ser un número >= 0' });
     const l = db.ajustarLote(Number(req.params.id), cantidad);
@@ -198,7 +198,7 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
     res.json(l);
   });
 
-  app.get('/api/inventario/vencimientos', conToken('despachador'), (req, res) => {
+  app.get('/api/inventario/vencimientos', conToken('despachador', 'inventario'), (req, res) => {
     const dias = Number(req.query.dias) || Number(db.getConfig('dias_alerta_vencimiento')) || 60;
     res.json(db.proximosAVencer(dias));
   });
@@ -261,17 +261,23 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
   });
 
   // ---- Fórmulas médicas + OCR ----
-  // El paciente adjunta la foto de su fórmula (base64, sin token)
+  // El paciente (sin token) o el despachador adjuntan la fórmula: una imagen
+  // (imagen_base64) o varias páginas (imagenes_base64, p. ej. un PDF renderizado).
   app.post('/api/formulas', (req, res) => {
-    const { turno_id, imagen_base64 } = req.body || {};
+    const { turno_id, imagen_base64, imagenes_base64 } = req.body || {};
     const t = db.turnoCompleto(Number(turno_id));
     if (!t) return res.status(404).json({ error: 'Turno no encontrado' });
-    if (!imagen_base64 || String(imagen_base64).length < 100) {
-      return res.status(400).json({ error: 'imagen_base64 es obligatoria' });
+    let paginas = Array.isArray(imagenes_base64) ? imagenes_base64 : (imagen_base64 ? [imagen_base64] : []);
+    paginas = paginas
+      .map(p => String(p).replace(/^data:image\/\w+;base64,/, ''))
+      .filter(p => p.length >= 100)
+      .slice(0, 8); // máximo 8 páginas por fórmula
+    if (!paginas.length) {
+      return res.status(400).json({ error: 'Se requiere imagen_base64 o imagenes_base64 (páginas del PDF)' });
     }
-    const limpio = String(imagen_base64).replace(/^data:image\/\w+;base64,/, '');
-    const f = db.crearFormula(t.id, limpio);
-    db.auditar('paciente:' + t.numero_documento, 'FORMULA_SUBIDA', `turno ${t.numero}, fórmula ${f.id}`);
+    const f = db.crearFormula(t.id, paginas);
+    db.auditar(esLocalhost(req) || dispositivoDe(req) ? actorDe(req) : 'paciente:' + t.numero_documento,
+      'FORMULA_SUBIDA', `turno ${t.numero}, fórmula ${f.id} (${paginas.length} página(s))`);
     broadcast('turnos_updated');
     res.status(201).json(f);
   });
@@ -280,22 +286,26 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
     res.json(db.getFormulas(Number(req.params.turno_id)));
   });
 
+  // Imagen de una página de la fórmula (?pagina=1..n, por defecto la primera)
   app.get('/api/formulas/:id/imagen', conToken('despachador'), (req, res) => {
     const f = db.getFormula(Number(req.params.id));
-    if (!f || !fs.existsSync(f.imagen_ruta)) return res.status(404).json({ error: 'Imagen no encontrada' });
-    res.type('jpeg').send(fs.readFileSync(f.imagen_ruta));
+    const rutas = db.rutasFormula(f);
+    const idx = Math.max(1, Number(req.query.pagina) || 1) - 1;
+    if (!rutas[idx] || !fs.existsSync(rutas[idx])) return res.status(404).json({ error: 'Imagen no encontrada' });
+    res.type('jpeg').send(fs.readFileSync(rutas[idx]));
   });
 
-  // Ejecuta el OCR con OpenAI Vision y valida contra inventario
+  // Ejecuta el OCR con OpenAI Vision (todas las páginas) y valida contra inventario
   app.post('/api/formulas/:id/ocr', conToken('despachador'), async (req, res) => {
     const f = db.getFormula(Number(req.params.id));
     if (!f) return res.status(404).json({ error: 'Fórmula no encontrada' });
-    if (!fs.existsSync(f.imagen_ruta)) return res.status(410).json({ error: 'La imagen ya no existe en disco' });
+    const rutas = db.rutasFormula(f).filter(r => fs.existsSync(r));
+    if (!rutas.length) return res.status(410).json({ error: 'Las imágenes ya no existen en disco' });
     try {
       const resultado = await procesarFormula({
         apiKey: db.getConfig('openai_api_key'),
         modelo: db.getConfig('openai_modelo'),
-        imagenBase64: fs.readFileSync(f.imagen_ruta).toString('base64'),
+        imagenesBase64: rutas.map(r => fs.readFileSync(r).toString('base64')),
       });
       db.setResultadoOcr(f.id, { json: resultado });
       db.auditar(actorDe(req), 'OCR_PROCESADO', `fórmula ${f.id}: ${resultado.medicamentos.length} medicamentos`);

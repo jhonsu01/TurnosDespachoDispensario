@@ -66,6 +66,16 @@
                 android:text="@string/rol_despachador" />
 
             <Button
+                android:id="@+id/btnRolInventario"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:paddingVertical="16dp"
+                android:backgroundTint="@color/cian_oscuro"
+                android:textColor="@color/texto"
+                android:text="@string/rol_inventario" />
+
+            <Button
                 android:id="@+id/btnRolKiosko"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -294,10 +304,19 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:layout_marginBottom="12dp"
                 android:backgroundTint="@color/panel"
                 android:textColor="@color/texto"
                 android:text="@string/btn_formula_galeria" />
+
+            <Button
+                android:id="@+id/btnFormulaPdf"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="12dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/texto"
+                android:text="@string/btn_formula_pdf" />
 
             <ImageView
                 android:id="@+id/imgQr"
@@ -400,6 +419,47 @@
                 android:contentDescription="Fórmula médica"
                 android:visibility="gone" />
 
+            <!-- El despachador puede adjuntar la fórmula si el paciente la trae en físico -->
+            <LinearLayout
+                android:id="@+id/filaAdjuntarDespacho"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="8dp">
+
+                <Button
+                    android:id="@+id/btnDespachoCamara"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:backgroundTint="@color/panel"
+                    android:textColor="@color/texto"
+                    android:textSize="12sp"
+                    android:text="📷 Foto" />
+
+                <Button
+                    android:id="@+id/btnDespachoGaleria"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:backgroundTint="@color/panel"
+                    android:textColor="@color/texto"
+                    android:textSize="12sp"
+                    android:text="🖼 Imagen" />
+
+                <Button
+                    android:id="@+id/btnDespachoPdf"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/panel"
+                    android:textColor="@color/texto"
+                    android:textSize="12sp"
+                    android:text="📄 PDF" />
+            </LinearLayout>
+
             <Button
                 android:id="@+id/btnOcr"
                 android:layout_width="match_parent"
@@ -418,6 +478,23 @@
                 android:textColor="@color/texto"
                 android:textSize="14sp" />
 
+            <!-- Búsqueda manual de medicamentos (alternativa al OCR) -->
+            <EditText
+                android:id="@+id/inputBuscarMed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:hint="@string/hint_buscar_med"
+                android:inputType="text"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <LinearLayout
+                android:id="@+id/resultadosBusqueda"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
             <Button
                 android:id="@+id/btnEntregar"
                 android:layout_width="match_parent"
@@ -433,6 +510,55 @@
                 android:backgroundTint="@color/panel"
                 android:textColor="@color/gris"
                 android:text="@string/btn_volver" />
+        </LinearLayout>
+
+        <!-- ============ VISTA 6: INVENTARIO (ALMACENISTA) ============ -->
+        <LinearLayout
+            android:id="@+id/vistaInventario"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/titulo_inventario"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:layout_marginBottom="10dp" />
+
+            <Button
+                android:id="@+id/btnAgregarMedicamento"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="@string/btn_agregar_medicamento" />
+
+            <EditText
+                android:id="@+id/inputBuscarInv"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_buscar_med"
+                android:inputType="text"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <LinearLayout
+                android:id="@+id/listaInventario"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/btnCambiarRolInventario"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/gris"
+                android:text="@string/btn_cambiar_rol" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>
