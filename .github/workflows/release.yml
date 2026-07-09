@@ -1,0 +1,133 @@
+# Publica una Release de GitHub con el MSI (Windows) y el APK (Android) adjuntos,
+# nombrados automáticamente con el tag (TurnosDispensario-vX.Y.Z.msi/.apk).
+# Política de releases: SOLO se conserva la última. Antes de publicar, el job
+# "release" elimina todas las releases (y sus tags) anteriores.
+#
+# Se dispara de dos formas:
+#   1. Automática: al hacer push de un tag "v*" (ej: v0.1.0)
+#   2. Manual: pestaña Actions -> Release -> "Run workflow" indicando el tag
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de la release (ej: v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build-msi:
+    name: Instalador Windows (MSI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: desktop
+        run: npm ci
+
+      - name: Compilar MSI
+        working-directory: desktop
+        run: npx electron-builder --win msi --publish never
+
+      - name: Renombrar MSI con el tag
+        shell: bash
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          cp desktop/dist/*.msi "TurnosDispensario-${TAG}.msi"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: TurnosDispensario-*.msi
+          if-no-files-found: error
+
+  build-apk:
+    name: APK Android (release firmado)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Restaurar keystore de firma (GitHub Secrets)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p android/keystore
+          echo "$KEYSTORE_B64" | base64 -d > android/keystore/dispensario.keystore
+
+      - name: Compilar APK release
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_FILE: ../keystore/dispensario.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: dispensario
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Renombrar APK con el tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          cp android/app/build/outputs/apk/release/app-release.apk "TurnosDispensario-${TAG}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: TurnosDispensario-*.apk
+          if-no-files-found: error
+
+  release:
+    name: Publicar Release (y borrar las anteriores)
+    needs: [build-msi, build-apk]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artefactos
+
+      # Mantener SOLO la última release: elimina releases y tags anteriores
+      - name: Eliminar releases anteriores
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_ACTUAL: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          for tag in $(gh release list --limit 100 --json tagName --jq '.[].tagName'); do
+            if [ "$tag" != "$TAG_ACTUAL" ]; then
+              echo "🗑 Eliminando release y tag anterior: $tag"
+              gh release delete "$tag" --yes --cleanup-tag || true
+            fi
+          done
+
+      - name: Crear Release con artefactos
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Turnos Dispensario ${{ github.event.inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artefactos/*.msi
+            artefactos/*.apk

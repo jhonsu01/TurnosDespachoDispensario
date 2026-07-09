@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Turnero — Dispensario</title>
+<style>
+  :root {
+    --bg: #0B1117;
+    --panel: #131C25;
+    --texto: #F1F5F9;
+    --cian: #22D3EE;
+    --amarillo: #FACC15;
+    --rojo: #EF4444;
+    --verde: #4ADE80;
+    --gris: #64748B;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--texto);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.2rem 2rem;
+    background: var(--panel);
+    border-bottom: 2px solid #1E293B;
+  }
+  header h1 { font-size: 2rem; letter-spacing: 0.05em; }
+  header .hora { font-size: 2rem; font-variant-numeric: tabular-nums; color: var(--cian); }
+  main { flex: 1; display: grid; grid-template-columns: 2fr 1fr; gap: 0; min-height: 0; }
+  section { padding: 1.5rem 2rem; overflow: hidden; }
+  h2 { font-size: 1.3rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--gris); margin-bottom: 1rem; }
+  .llamados .turno-card {
+    background: var(--panel);
+    border-left: 10px solid var(--amarillo);
+    border-radius: 10px;
+    padding: 1.2rem 1.8rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: pulso 1.6s infinite;
+  }
+  @keyframes pulso { 0%,100% { box-shadow: 0 0 0 0 rgba(250,204,21,.35);} 50% { box-shadow: 0 0 0 14px rgba(250,204,21,0);} }
+  .turno-num { font-size: 3.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .turno-mod { font-size: 2.2rem; color: var(--amarillo); font-weight: 700; }
+  .espera { border-right: 2px solid #1E293B; }
+  .lista-espera { display: flex; flex-direction: column; gap: .55rem; }
+  .fila {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel); border-radius: 8px; padding: .7rem 1.2rem;
+    font-size: 1.6rem; font-variant-numeric: tabular-nums;
+  }
+  .estado { font-size: 1.05rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+  .ESPERANDO { color: var(--cian); }
+  .LLAMANDO { color: var(--amarillo); }
+  .DESPACHO { color: var(--amarillo); }
+  .NO_PRESENTADO { color: var(--rojo); }
+  .ENTREGADO, .FINALIZADO { color: var(--gris); }
+  footer {
+    background: var(--panel); border-top: 2px solid #1E293B;
+    padding: .8rem 0; white-space: nowrap; overflow: hidden;
+  }
+  .cinta { display: inline-block; padding-left: 100%; animation: scroll 45s linear infinite; font-size: 1.4rem; }
+  .cinta b { color: var(--cian); }
+  @keyframes scroll { 0% { transform: translateX(0);} 100% { transform: translateX(-100%);} }
+  .vacio { color: var(--gris); font-size: 1.4rem; padding: 1rem 0; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>💊 <span id="nombre">Dispensario de Medicamentos</span></h1>
+    <div class="hora" id="hora">--:--</div>
+  </header>
+  <main>
+    <section class="espera">
+      <h2>Turnos en espera</h2>
+      <div class="lista-espera" id="espera"></div>
+    </section>
+    <section class="llamados">
+      <h2>Llamando ahora</h2>
+      <div id="llamados"></div>
+    </section>
+  </main>
+  <footer><div class="cinta" id="cinta">Cargando…</div></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+function pad(n) { return String(n).padStart(3, '0'); }
+
+async function cargarTurnos() {
+  try {
+    const r = await fetch('/api/turnos');
+    const turnos = await r.json();
+    const llamados = turnos.filter(t => t.estado === 'LLAMANDO' || t.estado === 'DESPACHO');
+    const espera = turnos.filter(t => t.estado === 'ESPERANDO' || t.estado === 'CREADO');
+    const recientes = turnos.filter(t => t.estado === 'NO_PRESENTADO').slice(-3);
+
+    $('llamados').innerHTML = llamados.length
+      ? llamados.map(t => `
+        <div class="turno-card">
+          <div class="turno-num">${pad(t.numero)}</div>
+          <div class="turno-mod">Módulo ${t.modulo_asignado ?? '—'}</div>
+        </div>`).join('')
+      : '<div class="vacio">Sin llamados activos</div>';
+
+    $('espera').innerHTML = (espera.length || recientes.length)
+      ? espera.map(t => `
+          <div class="fila"><span>Turno ${pad(t.numero)}</span>
+          <span class="estado ESPERANDO">Esperando</span></div>`).join('') +
+        recientes.map(t => `
+          <div class="fila"><span>Turno ${pad(t.numero)}</span>
+          <span class="estado NO_PRESENTADO">No presentado</span></div>`).join('')
+      : '<div class="vacio">No hay turnos en espera</div>';
+  } catch (e) { /* servidor reiniciando */ }
+}
+
+async function cargarCinta() {
+  try {
+    const cfg = await (await fetch('/api/display')).json();
+    if (cfg.nombre_centro) $('nombre').textContent = cfg.nombre_centro;
+    const partes = ['<b>Bienvenido al dispensario</b> — presenta tu documento y tu fórmula médica al ser llamado'];
+    if (cfg.marquesina_mensaje) {
+      partes.push(`<b style="color:var(--amarillo)">📢 ${cfg.marquesina_mensaje}</b>`);
+    }
+    $('cinta').innerHTML = partes.join(' &nbsp;&nbsp;•&nbsp;&nbsp; ');
+    $('cinta').style.animationDuration = `${Number(cfg.marquesina_velocidad) || 45}s`;
+  } catch (e) {}
+}
+
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(); const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880; g.gain.value = 0.15;
+    o.start(); o.stop(ctx.currentTime + 0.4);
+  } catch (e) {}
+}
+
+function conectarWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'turnos_updated') { cargarTurnos(); if (msg.llamado) beep(); }
+    if (msg.type === 'config_updated') cargarCinta();
+  };
+  ws.onclose = () => setTimeout(conectarWS, 3000);
+}
+
+setInterval(() => {
+  $('hora').textContent = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+}, 1000);
+setInterval(cargarTurnos, 15000);
+
+cargarTurnos(); cargarCinta(); conectarWS();
+</script>
+</body>
+</html>

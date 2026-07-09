@@ -1,0 +1,45 @@
+{
+  "name": "turnos-dispensario-desktop",
+  "productName": "Turnos Dispensario",
+  "version": "0.1.0",
+  "description": "Servidor local + panel de administración del sistema de turnos y despacho de medicamentos con OCR e inventario",
+  "main": "src/main.js",
+  "author": "Jhon Supelano",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win msi --publish never"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "sql.js": "^1.13.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.dispensario.turnos",
+    "productName": "Turnos Dispensario",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "public/**/*"
+    ],
+    "win": {
+      "target": [
+        "msi"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "msi": {
+      "oneClick": false,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "artifactName": "TurnosDispensario-${version}.msi"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Turnos Dispensario</string>
+    <string name="titulo_rol">¿Cómo vas a usar este dispositivo?</string>
+    <string name="rol_paciente">👤 Paciente\nSolicito mis medicamentos</string>
+    <string name="rol_despachador">💊 Despachador\nAtiendo turnos y entrego</string>
+    <string name="rol_kiosko">📺 Modo Kiosko\nPantalla del turnero o punto de turnos</string>
+    <string name="titulo_config">Conectar con el dispensario</string>
+    <string name="hint_servidor">IP del servidor (ej: 192.168.0.10)</string>
+    <string name="hint_puerto">Puerto (ej: 3000)</string>
+    <string name="hint_pin">PIN del rol</string>
+    <string name="btn_conectar">Conectar</string>
+    <string name="btn_buscar">🔄 Buscar servidor de nuevo</string>
+    <string name="titulo_registro">Solicitar turno</string>
+    <string name="hint_documento">Número de documento</string>
+    <string name="hint_nombre">Nombre completo (opcional)</string>
+    <string name="hint_telefono">Teléfono (opcional)</string>
+    <string name="btn_solicitar">🎫 Solicitar turno</string>
+    <string name="titulo_turno">Tu turno</string>
+    <string name="btn_nuevo_turno">Solicitar nuevo turno</string>
+    <string name="btn_cambiar_rol">Cambiar rol / servidor</string>
+    <string name="btn_historial">🧾 Consultar mis entregas anteriores</string>
+    <string name="btn_formula_camara">📷 Fotografiar fórmula</string>
+    <string name="btn_formula_galeria">🖼 Adjuntar de la galería</string>
+    <string name="titulo_despacho">Turnos del dispensario</string>
+    <string name="btn_ocr">🤖 Leer fórmula con IA (OCR)</string>
+    <string name="btn_entregar">✅ Confirmar entrega</string>
+    <string name="btn_volver">← Volver a la lista</string>
+</resources>

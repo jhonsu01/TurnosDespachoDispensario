@@ -1,0 +1,29 @@
+# Node / Electron
+node_modules/
+desktop/dist/
+npm-debug.log*
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.iml
+
+# Sistema agéntico local (no es parte del producto)
+memory/
+directives/
+execution/__pycache__/
+.tmp/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+
+# Firma Android (se inyecta por GitHub Secrets en CI)
+android/keystore/
+
+# Datos locales
+*.db
+.env
+.claude/

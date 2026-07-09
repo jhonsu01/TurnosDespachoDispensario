@@ -1,0 +1,438 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/fondo"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="💊 Turnos Dispensario"
+            android:textColor="@color/cian"
+            android:textSize="26sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/txtEstadoConexion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:textColor="@color/gris"
+            android:textSize="13sp"
+            android:layout_marginBottom="14dp" />
+
+        <!-- ============ VISTA 0: SELECCIÓN DE ROL ============ -->
+        <LinearLayout
+            android:id="@+id/vistaRol"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/titulo_rol"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:layout_marginBottom="16dp" />
+
+            <Button
+                android:id="@+id/btnRolPaciente"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:paddingVertical="16dp"
+                android:text="@string/rol_paciente" />
+
+            <Button
+                android:id="@+id/btnRolDespachador"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:paddingVertical="16dp"
+                android:backgroundTint="@color/amarillo"
+                android:textColor="@color/fondo"
+                android:text="@string/rol_despachador" />
+
+            <Button
+                android:id="@+id/btnRolKiosko"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingVertical="16dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/texto"
+                android:text="@string/rol_kiosko" />
+        </LinearLayout>
+
+        <!-- ============ VISTA 1: CONEXIÓN ============ -->
+        <LinearLayout
+            android:id="@+id/vistaConfig"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/titulo_config"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:layout_marginBottom="10dp" />
+
+            <TextView
+                android:id="@+id/txtBusqueda"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/amarillo"
+                android:textSize="14sp"
+                android:layout_marginBottom="10dp" />
+
+            <Button
+                android:id="@+id/btnBuscar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/texto"
+                android:text="@string/btn_buscar" />
+
+            <EditText
+                android:id="@+id/inputServidor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_servidor"
+                android:inputType="text"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <EditText
+                android:id="@+id/inputPuerto"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_puerto"
+                android:inputType="number"
+                android:text="3000"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <EditText
+                android:id="@+id/inputPin"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_pin"
+                android:inputType="numberPassword"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <Button
+                android:id="@+id/btnConectar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="@string/btn_conectar" />
+
+            <Button
+                android:id="@+id/btnVolverRol"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/gris"
+                android:text="@string/btn_cambiar_rol" />
+        </LinearLayout>
+
+        <!-- ============ VISTA 2: REGISTRO (PACIENTE) ============ -->
+        <LinearLayout
+            android:id="@+id/vistaRegistro"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/titulo_registro"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:layout_marginBottom="14dp" />
+
+            <Spinner
+                android:id="@+id/spinnerTipoDoc"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputDocumento"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_documento"
+                android:inputType="text"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <EditText
+                android:id="@+id/inputNombre"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_nombre"
+                android:inputType="textPersonName"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <EditText
+                android:id="@+id/inputTelefono"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/hint_telefono"
+                android:inputType="phone"
+                android:textColor="@color/texto"
+                android:textColorHint="@color/gris" />
+
+            <Button
+                android:id="@+id/btnSolicitar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:text="@string/btn_solicitar" />
+
+            <Button
+                android:id="@+id/btnHistorial"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/cian_oscuro"
+                android:textColor="@color/texto"
+                android:text="@string/btn_historial" />
+
+            <Button
+                android:id="@+id/btnCambiarServidor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/gris"
+                android:text="@string/btn_cambiar_rol" />
+        </LinearLayout>
+
+        <!-- ============ VISTA 3: TURNO ACTIVO (PACIENTE) ============ -->
+        <LinearLayout
+            android:id="@+id/vistaTurno"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:text="@string/titulo_turno"
+                android:textColor="@color/gris"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/txtNumeroTurno"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/texto"
+                android:textSize="72sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtEstadoTurno"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/txtModulo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/amarillo"
+                android:textSize="19sp"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/txtFormulaEstado"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/verde"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <Button
+                android:id="@+id/btnFormulaCamara"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/cian_oscuro"
+                android:textColor="@color/texto"
+                android:text="@string/btn_formula_camara" />
+
+            <Button
+                android:id="@+id/btnFormulaGaleria"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="12dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/texto"
+                android:text="@string/btn_formula_galeria" />
+
+            <ImageView
+                android:id="@+id/imgQr"
+                android:layout_width="220dp"
+                android:layout_height="220dp"
+                android:layout_marginBottom="10dp"
+                android:contentDescription="QR del turno" />
+
+            <TextView
+                android:id="@+id/txtPinTurno"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/gris"
+                android:textSize="16sp"
+                android:layout_marginBottom="16dp" />
+
+            <TextView
+                android:id="@+id/txtComprobante"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/panel"
+                android:padding="14dp"
+                android:textColor="@color/texto"
+                android:textSize="14sp"
+                android:visibility="gone"
+                android:layout_marginBottom="12dp" />
+
+            <Button
+                android:id="@+id/btnNuevoTurno"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/btn_nuevo_turno"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- ============ VISTA 4: LISTA DE TURNOS (DESPACHADOR) ============ -->
+        <LinearLayout
+            android:id="@+id/vistaDespacho"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/titulo_despacho"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:layout_marginBottom="12dp" />
+
+            <LinearLayout
+                android:id="@+id/listaTurnosDespacho"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <Button
+                android:id="@+id/btnCambiarRolDespacho"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/gris"
+                android:text="@string/btn_cambiar_rol" />
+        </LinearLayout>
+
+        <!-- ============ VISTA 5: DETALLE DE DESPACHO ============ -->
+        <LinearLayout
+            android:id="@+id/vistaDespachoDetalle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/txtDespachoTitulo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/texto"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:id="@+id/txtFormulaInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/gris"
+                android:textSize="14sp"
+                android:layout_marginBottom="8dp" />
+
+            <ImageView
+                android:id="@+id/imgFormula"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:adjustViewBounds="true"
+                android:layout_marginBottom="10dp"
+                android:contentDescription="Fórmula médica"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnOcr"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/cian_oscuro"
+                android:textColor="@color/texto"
+                android:text="@string/btn_ocr" />
+
+            <TextView
+                android:id="@+id/txtValidacion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/panel"
+                android:padding="12dp"
+                android:layout_marginTop="12dp"
+                android:textColor="@color/texto"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnEntregar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/btn_entregar" />
+
+            <Button
+                android:id="@+id/btnVolverLista"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel"
+                android:textColor="@color/gris"
+                android:text="@string/btn_volver" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

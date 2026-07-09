@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kiosko de Turnos — Dispensario</title>
+<style>
+  :root {
+    --bg: #0B1117; --panel: #131C25; --texto: #F1F5F9;
+    --cian: #22D3EE; --amarillo: #FACC15; --gris: #64748B;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body {
+    background: var(--bg); color: var(--texto); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 1.5rem; text-align: center;
+  }
+  h1 { font-size: 2rem; margin-bottom: .4rem; }
+  .sub { color: var(--gris); margin-bottom: 1.6rem; font-size: 1.1rem; }
+  .panel { background: var(--panel); border-radius: 18px; padding: 2rem; width: min(560px, 94vw); }
+  .doc {
+    font-size: 2.4rem; letter-spacing: .2em; background: #0B1117; border-radius: 12px;
+    padding: .8rem 1rem; min-height: 4.4rem; margin-bottom: 1.2rem; font-variant-numeric: tabular-nums;
+    border: 2px solid #1E293B;
+  }
+  .teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
+  .teclado button {
+    font-size: 2rem; padding: 1rem 0; border: none; border-radius: 12px;
+    background: #1E293B; color: var(--texto); cursor: pointer;
+  }
+  .teclado button:active { background: var(--cian); color: var(--bg); }
+  .solicitar {
+    margin-top: 1.2rem; width: 100%; font-size: 1.5rem; padding: 1.1rem 0;
+    border: none; border-radius: 12px; background: var(--cian); color: #06282E;
+    font-weight: 800; cursor: pointer;
+  }
+  #resultado { display: none; }
+  .num-turno { font-size: 6rem; font-weight: 800; color: var(--amarillo); font-variant-numeric: tabular-nums; }
+  #qr { margin: 1rem auto; background: white; padding: 12px; border-radius: 12px; width: fit-content; }
+  .pin { font-size: 1.4rem; color: var(--cian); letter-spacing: .15em; }
+  .aviso { color: var(--gris); margin-top: 1rem; font-size: 1rem; }
+</style>
+</head>
+<body>
+  <h1>💊 <span id="nombre">Dispensario</span></h1>
+  <p class="sub">Toma tu turno: escribe tu número de documento</p>
+
+  <div class="panel" id="formulario">
+    <div class="doc" id="doc">&nbsp;</div>
+    <div class="teclado">
+      <button onclick="tecla('1')">1</button><button onclick="tecla('2')">2</button><button onclick="tecla('3')">3</button>
+      <button onclick="tecla('4')">4</button><button onclick="tecla('5')">5</button><button onclick="tecla('6')">6</button>
+      <button onclick="tecla('7')">7</button><button onclick="tecla('8')">8</button><button onclick="tecla('9')">9</button>
+      <button onclick="borrar()">⌫</button><button onclick="tecla('0')">0</button><button onclick="limpiar()">C</button>
+    </div>
+    <button class="solicitar" onclick="solicitar()">🎫 Solicitar turno</button>
+  </div>
+
+  <div class="panel" id="resultado">
+    <p style="font-size:1.3rem;">Tu turno es</p>
+    <div class="num-turno" id="turno-num">000</div>
+    <div id="qr"></div>
+    <p class="pin">PIN: <b id="turno-pin"></b></p>
+    <p class="aviso">📱 Escanea el QR con la app para seguir tu turno y adjuntar tu fórmula.<br>
+      Observa la pantalla: te llamaremos por este número.</p>
+  </div>
+
+<script src="/qrcode.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+let documento = '';
+let timerVolver = null;
+
+fetch('/api/display').then(r => r.json()).then(d => {
+  if (d.nombre_centro) $('nombre').textContent = d.nombre_centro;
+}).catch(() => {});
+
+function pintarDoc() { $('doc').textContent = documento || ' '; }
+function tecla(d) { if (documento.length < 15) { documento += d; pintarDoc(); } }
+function borrar() { documento = documento.slice(0, -1); pintarDoc(); }
+function limpiar() { documento = ''; pintarDoc(); }
+
+async function solicitar() {
+  if (documento.length < 3) { alert('Escribe tu número de documento completo'); return; }
+  try {
+    const r = await fetch('/api/turnos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo_documento: 'CC', numero_documento: documento }),
+    });
+    const t = await r.json();
+    if (!r.ok) { alert(t.error || 'No se pudo crear el turno'); return; }
+    $('turno-num').textContent = String(t.numero).padStart(3, '0');
+    $('turno-pin').textContent = t.codigo_pin;
+    $('qr').innerHTML = '';
+    try { new QRCode($('qr'), { text: t.qr_code, width: 180, height: 180 }); } catch (e) {}
+    $('formulario').style.display = 'none';
+    $('resultado').style.display = 'block';
+    clearTimeout(timerVolver);
+    timerVolver = setTimeout(volver, 20000);
+  } catch (e) {
+    alert('Sin conexión con el servidor. Intenta de nuevo.');
+  }
+}
+
+function volver() {
+  documento = '';
+  pintarDoc();
+  $('resultado').style.display = 'none';
+  $('formulario').style.display = 'block';
+}
+document.body.addEventListener('click', (e) => {
+  // Cualquier toque en la pantalla de resultado vuelve al formulario
+  if ($('resultado').style.display === 'block' && !$('resultado').contains(e.target)) volver();
+});
+</script>
+</body>
+</html>

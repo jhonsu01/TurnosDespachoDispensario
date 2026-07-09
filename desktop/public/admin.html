@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de Administración — Turnos Dispensario</title>
+<style>
+  :root {
+    --bg: #F3F6F8; --panel: #FFFFFF; --texto: #16232E; --borde: #DEE6EB;
+    --primario: #0E7490; --primario-osc: #155E75; --ambar: #B45309; --rojo: #DC2626; --gris: #64748B;
+    --verde: #15803D;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body { background: var(--bg); color: var(--texto); }
+  header {
+    background: #0C4A6E; color: white; padding: .9rem 1.5rem;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem;
+  }
+  header h1 { font-size: 1.25rem; }
+  .conexion { font-size: .88rem; background: rgba(255,255,255,.12); padding: .4rem .8rem; border-radius: 6px; }
+  .conexion b { color: #7DD3FC; }
+  nav { display: flex; gap: .25rem; background: var(--panel); border-bottom: 1px solid var(--borde); padding: 0 1rem; flex-wrap: wrap; }
+  nav button {
+    border: none; background: none; padding: .85rem 1rem; cursor: pointer;
+    font-size: .93rem; color: var(--gris); border-bottom: 3px solid transparent;
+  }
+  nav button.activo { color: var(--primario); border-bottom-color: var(--primario); font-weight: 600; }
+  main { padding: 1.25rem; max-width: 1240px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.activo { display: block; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+  th, td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid var(--borde); font-size: .9rem; }
+  th { background: #E0F2FE; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: #075985; }
+  .badge { padding: .2rem .6rem; border-radius: 99px; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+  .ESPERANDO, .CREADO { background: #DBEAFE; color: #1E40AF; }
+  .LLAMANDO { background: #FEF9C3; color: #854D0E; }
+  .DESPACHO { background: #FEF3C7; color: #92400E; }
+  .ENTREGADO { background: #DCFCE7; color: #166534; }
+  .FINALIZADO { background: #E5E7EB; color: #374151; }
+  .NO_PRESENTADO { background: #FEE2E2; color: #991B1B; }
+  .ok { background: #DCFCE7; color: #166534; }
+  .warn { background: #FEF9C3; color: #854D0E; }
+  .err { background: #FEE2E2; color: #991B1B; }
+  button.accion {
+    border: 1px solid var(--borde); background: var(--panel); border-radius: 6px;
+    padding: .35rem .7rem; margin: 0 .12rem .2rem 0; cursor: pointer; font-size: .82rem;
+  }
+  button.accion:hover { background: #E0F2FE; border-color: var(--primario); }
+  button.primario { background: var(--primario); color: white; border: none; }
+  button.primario:hover { background: var(--primario-osc); }
+  button.peligro { color: var(--rojo); }
+  input, select {
+    padding: .5rem .6rem; border: 1px solid var(--borde); border-radius: 6px; font-size: .93rem; width: 100%;
+    background: white; color: var(--texto);
+  }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .9rem; }
+  .campo label { display: block; font-size: .8rem; color: var(--gris); margin-bottom: .3rem; }
+  .card { background: var(--panel); border-radius: 10px; padding: 1.15rem; box-shadow: 0 1px 3px rgba(0,0,0,.07); margin-bottom: 1rem; }
+  .modal-fondo {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    align-items: center; justify-content: center; z-index: 10;
+  }
+  .modal-fondo.abierto { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 1.4rem; width: min(720px, 94vw); max-height: 90vh; overflow: auto; }
+  .modal h3 { margin-bottom: .9rem; }
+  .fila-acciones { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem; flex-wrap: wrap; }
+  .num { font-variant-numeric: tabular-nums; }
+  .hint { font-size: .8rem; color: var(--gris); margin-top: .35rem; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .9rem; margin-bottom: 1rem; }
+  .stat { background: var(--panel); border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+  .stat .valor { font-size: 2rem; font-weight: 800; color: var(--primario); }
+  .stat .nombre { font-size: .8rem; color: var(--gris); text-transform: uppercase; letter-spacing: .04em; }
+  img.formula { max-width: 100%; border-radius: 8px; border: 1px solid var(--borde); }
+  pre.json { background: #F8FAFC; border: 1px solid var(--borde); border-radius: 8px; padding: .8rem; font-size: .78rem; overflow: auto; }
+  .vencido { color: var(--rojo); font-weight: 700; }
+  .porvencer { color: var(--ambar); font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💊 Turnos Dispensario — Administración</h1>
+  <div class="conexion" id="conexion">Cargando conexión…</div>
+</header>
+<nav>
+  <button data-tab="dashboard" class="activo">Dashboard</button>
+  <button data-tab="turnos">Turnos</button>
+  <button data-tab="medicamentos">Medicamentos</button>
+  <button data-tab="inventario">Inventario</button>
+  <button data-tab="entregas">Entregas</button>
+  <button data-tab="auditoria">Auditoría</button>
+  <button data-tab="config">Configuración</button>
+</nav>
+<main>
+  <!-- ============ DASHBOARD ============ -->
+  <div class="tab activo" id="tab-dashboard">
+    <div class="stats" id="stats"></div>
+    <div class="card">
+      <b>⚠ Medicamentos próximos a vencer</b>
+      <table style="margin-top:.7rem;">
+        <thead><tr><th>Medicamento</th><th>Lote</th><th>Cantidad</th><th>Vence</th></tr></thead>
+        <tbody id="cuerpo-vencimientos"><tr><td colspan="4">Cargando…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <b>Últimas entregas</b>
+      <table style="margin-top:.7rem;">
+        <thead><tr><th>Código</th><th>Turno</th><th>Paciente</th><th>Ítems</th><th>Fecha</th></tr></thead>
+        <tbody id="cuerpo-entregas-dash"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ TURNOS ============ -->
+  <div class="tab" id="tab-turnos">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;">
+      <div>
+        <b>Turnos</b>
+        <div class="hint">Pantalla pública del turnero: <a href="/display.html" target="_blank">/display.html</a> ·
+          Kiosko de autoservicio: <a href="/kiosko.html" target="_blank">/kiosko.html</a></div>
+      </div>
+      <button class="accion primario" onclick="abrirNuevoTurno()">+ Registrar turno manual</button>
+    </div>
+    <div class="card" style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:end;">
+      <div class="campo" style="flex:1;min-width:180px;"><label>Buscar (documento, nombre o Nº)</label>
+        <input id="filtro-texto" placeholder="Ej: 1121888926 o 006" oninput="pintarTurnos()"></div>
+      <div class="campo"><label>Estado</label>
+        <select id="filtro-estado" onchange="pintarTurnos()">
+          <option value="">Todos</option>
+          <option value="ESPERANDO">Esperando</option>
+          <option value="LLAMANDO">Llamando</option>
+          <option value="DESPACHO">En despacho</option>
+          <option value="ENTREGADO">Entregado</option>
+          <option value="FINALIZADO">Finalizado</option>
+          <option value="NO_PRESENTADO">No presentado</option>
+        </select></div>
+      <div class="campo"><label>Fecha</label>
+        <input id="filtro-fecha" type="date" onchange="cargarTurnos()"></div>
+      <button class="accion" onclick="limpiarFiltros()">Limpiar</button>
+    </div>
+    <table>
+      <thead><tr><th>Turno</th><th>Paciente</th><th>Fórmula</th><th>Registro</th><th>Llamado</th><th>Estado</th><th>Módulo</th><th>Acciones</th></tr></thead>
+      <tbody id="cuerpo-turnos"><tr><td colspan="8">Cargando…</td></tr></tbody>
+    </table>
+  </div>
+
+  <!-- ============ MEDICAMENTOS ============ -->
+  <div class="tab" id="tab-medicamentos">
+    <div class="card">
+      <b>Agregar medicamento</b>
+      <div class="form-grid" style="margin-top:.8rem;">
+        <div class="campo"><label>Código</label><input id="nmed-codigo" placeholder="MED-011"></div>
+        <div class="campo"><label>Nombre</label><input id="nmed-nombre" placeholder="Losartán"></div>
+        <div class="campo"><label>Principio activo</label><input id="nmed-principio" placeholder="Losartán potásico"></div>
+        <div class="campo"><label>Concentración</label><input id="nmed-conc" placeholder="50mg"></div>
+        <div class="campo"><label>Presentación</label><input id="nmed-pres" placeholder="Tableta"></div>
+        <div class="campo"><label>Laboratorio</label><input id="nmed-lab" placeholder="Genfar"></div>
+      </div>
+      <div class="fila-acciones"><button class="accion primario" onclick="agregarMedicamento()">+ Agregar</button></div>
+    </div>
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th>Principio activo</th><th>Concentración</th><th>Presentación</th><th>Laboratorio</th><th>Stock</th><th></th></tr></thead>
+      <tbody id="cuerpo-medicamentos"></tbody>
+    </table>
+  </div>
+
+  <!-- ============ INVENTARIO ============ -->
+  <div class="tab" id="tab-inventario">
+    <div class="card">
+      <b>Entrada de inventario (nuevo lote)</b>
+      <div class="form-grid" style="margin-top:.8rem;">
+        <div class="campo" style="grid-column: span 2;"><label>Medicamento</label><select id="nlote-med"></select></div>
+        <div class="campo"><label>Lote</label><input id="nlote-lote" placeholder="L-2026-055"></div>
+        <div class="campo"><label>Cantidad</label><input id="nlote-cant" type="number" min="1"></div>
+        <div class="campo"><label>Fecha de vencimiento</label><input id="nlote-venc" type="date"></div>
+      </div>
+      <div class="fila-acciones"><button class="accion primario" onclick="agregarLote()">+ Registrar entrada</button></div>
+    </div>
+    <table>
+      <thead><tr><th>Medicamento</th><th>Lote</th><th>Cantidad</th><th>Vence</th><th></th></tr></thead>
+      <tbody id="cuerpo-inventario"></tbody>
+    </table>
+  </div>
+
+  <!-- ============ ENTREGAS ============ -->
+  <div class="tab" id="tab-entregas">
+    <div class="card"><b>Historial de entregas</b>
+      <div class="hint">Cada entrega genera un comprobante JSON firmado con HMAC-SHA256, descargable desde aquí.</div>
+    </div>
+    <table>
+      <thead><tr><th>Código</th><th>Turno</th><th>Paciente</th><th>Ítems</th><th>Entregado por</th><th>Fecha</th><th></th></tr></thead>
+      <tbody id="cuerpo-entregas"></tbody>
+    </table>
+  </div>
+
+  <!-- ============ AUDITORÍA ============ -->
+  <div class="tab" id="tab-auditoria">
+    <div class="card"><b>Registro de auditoría</b>
+      <div class="hint">Últimas 200 acciones del sistema (emparejamientos, OCR, entregas, inventario…).</div>
+    </div>
+    <table>
+      <thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Detalle</th></tr></thead>
+      <tbody id="cuerpo-auditoria"></tbody>
+    </table>
+  </div>
+
+  <!-- ============ CONFIGURACIÓN ============ -->
+  <div class="tab" id="tab-config">
+    <div class="card">
+      <b>Configuración del servidor</b>
+      <div class="form-grid" style="margin-top:1rem;">
+        <div class="campo"><label>Nombre del dispensario</label><input id="cfg-nombre"></div>
+        <div class="campo"><label>Timeout de ausencia (minutos)</label><input id="cfg-timeout" type="number" min="1"></div>
+        <div class="campo"><label>Número de módulos</label><input id="cfg-modulos" type="number" min="1" max="20"></div>
+        <div class="campo"><label>Días de alerta de vencimiento</label><input id="cfg-dias-venc" type="number" min="1"></div>
+      </div>
+      <div class="fila-acciones"><button class="accion primario" onclick="guardarConfig()">Guardar configuración</button></div>
+    </div>
+    <div class="card">
+      <b>🤖 OCR con IA (OpenAI Vision)</b>
+      <div class="hint">La lectura de fórmulas usa la API de OpenAI. La clave se guarda localmente en la base de datos
+        de este equipo y nunca sale de tu red (excepto hacia api.openai.com al procesar).</div>
+      <div class="form-grid" style="margin-top:.8rem;">
+        <div class="campo" style="grid-column: span 2;"><label>API key de OpenAI</label>
+          <input id="cfg-openai-key" type="password" placeholder="sk-…"></div>
+        <div class="campo"><label>Modelo</label><input id="cfg-openai-modelo" placeholder="gpt-4o-mini"></div>
+      </div>
+      <div class="fila-acciones"><button class="accion primario" onclick="guardarConfig()">Guardar configuración</button></div>
+    </div>
+    <div class="card">
+      <b>📺 Marquesina de las pantallas</b>
+      <div class="form-grid" style="margin-top:.8rem;">
+        <div class="campo"><label>Velocidad (segundos por vuelta)</label>
+          <input id="cfg-marquesina-vel" type="number" min="5" max="300"></div>
+        <div class="campo" style="grid-column: span 2;"><label>Mensaje personalizado (horarios, avisos…)</label>
+          <input id="cfg-marquesina-msg" placeholder="Ej: ☎ 300 123 4567 — Horario de atención lunes a viernes 7am-4pm"></div>
+      </div>
+      <div class="fila-acciones"><button class="accion primario" onclick="guardarConfig()">Guardar configuración</button></div>
+    </div>
+    <div class="card">
+      <b>🔐 PINs de emparejamiento de esta sesión</b>
+      <div class="hint">Cambian en cada arranque del servidor. Se ingresan UNA sola vez por dispositivo:
+      al emparejar, el dispositivo recibe un acceso permanente que puedes revocar abajo.
+      El rol Paciente no necesita PIN.</div>
+      <table style="margin-top:.8rem;max-width:520px;">
+        <thead><tr><th>Rol</th><th>PIN de sesión</th></tr></thead>
+        <tbody id="cuerpo-pines"></tbody>
+      </table>
+      <div class="fila-acciones">
+        <button class="accion" onclick="regenerarPines()">🔄 Regenerar PINs (invalida los no usados)</button>
+      </div>
+    </div>
+    <div class="card">
+      <b>📱 Dispositivos emparejados</b>
+      <table style="margin-top:.8rem;">
+        <thead><tr><th>Dispositivo</th><th>Rol</th><th>Emparejado</th><th>Último acceso</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="cuerpo-dispositivos"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <b>Conexión de la app Android</b>
+      <p class="hint" id="instrucciones-app">…</p>
+    </div>
+  </div>
+</main>
+
+<!-- Modal despacho: fórmula + OCR + validación + entrega -->
+<div class="modal-fondo" id="modal-despacho">
+  <div class="modal">
+    <h3>Despacho — Turno <span id="desp-turno-num" class="num"></span></h3>
+    <p class="hint" id="desp-paciente"></p>
+    <div id="desp-formulas"></div>
+    <h4 style="margin-top:1rem;">Medicamentos a entregar</h4>
+    <p class="hint">Verifica contra la fórmula física antes de confirmar (validación humana obligatoria).</p>
+    <table style="margin-top:.5rem;">
+      <thead><tr><th>Solicitado (OCR)</th><th>Medicamento del inventario</th><th>Stock</th><th>Cantidad</th><th></th></tr></thead>
+      <tbody id="desp-items"></tbody>
+    </table>
+    <div style="margin-top:.6rem;display:flex;gap:.5rem;align-items:end;flex-wrap:wrap;">
+      <div class="campo" style="flex:1;min-width:220px;"><label>Agregar medicamento manualmente</label>
+        <select id="desp-agregar-med"></select></div>
+      <div class="campo" style="width:110px;"><label>Cantidad</label><input id="desp-agregar-cant" type="number" min="1" value="1"></div>
+      <button class="accion" onclick="agregarItemManual()">+ Agregar</button>
+    </div>
+    <div class="fila-acciones">
+      <button class="accion" onclick="cerrarModal('modal-despacho')">Cerrar</button>
+      <button class="accion primario" onclick="confirmarEntrega()">✅ Confirmar entrega</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal comprobante -->
+<div class="modal-fondo" id="modal-comprobante">
+  <div class="modal">
+    <h3>Comprobante <span id="comp-codigo"></span></h3>
+    <p class="hint" id="comp-datos"></p>
+    <table style="margin-top:.6rem;">
+      <thead><tr><th>Medicamento</th><th>Cantidad</th><th>Lotes</th></tr></thead>
+      <tbody id="comp-detalle"></tbody>
+    </table>
+    <p class="hint" id="comp-firma" style="margin-top:.8rem;"></p>
+    <div class="fila-acciones">
+      <button class="accion" onclick="descargarComprobante()">⬇ Descargar JSON</button>
+      <button class="accion primario" onclick="cerrarModal('modal-comprobante')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal elegir módulo -->
+<div class="modal-fondo" id="modal-modulo">
+  <div class="modal">
+    <h3>¿A qué módulo llamar el turno?</h3>
+    <div id="botones-modulo" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.6rem;"></div>
+    <div class="fila-acciones"><button class="accion" onclick="cerrarModal('modal-modulo')">Cancelar</button></div>
+  </div>
+</div>
+
+<!-- Modal nuevo turno -->
+<div class="modal-fondo" id="modal-nuevo">
+  <div class="modal">
+    <h3>Registrar turno manual</h3>
+    <div class="form-grid">
+      <div class="campo"><label>Tipo de documento</label>
+        <select id="nuevo-tipo"><option>CC</option><option>CE</option><option>NIT</option><option>PASAPORTE</option><option>TI</option></select>
+      </div>
+      <div class="campo"><label>Número de documento</label><input id="nuevo-doc"></div>
+      <div class="campo"><label>Nombre (opcional)</label><input id="nuevo-nombre"></div>
+      <div class="campo"><label>Teléfono (opcional)</label><input id="nuevo-tel"></div>
+    </div>
+    <div class="fila-acciones">
+      <button class="accion" onclick="cerrarModal('modal-nuevo')">Cancelar</button>
+      <button class="accion primario" onclick="crearTurnoManual()">Crear turno</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(3, '0');
+let medicamentos = [];
+let config = {};
+let turnosCache = [];
+
+async function api(ruta, opts = {}) {
+  const r = await fetch(ruta, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { alert(data.error || `Error ${r.status}`); throw new Error(data.error || r.status); }
+  return data;
+}
+
+// ---- Tabs ----
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('activo'));
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('activo'));
+  b.classList.add('activo');
+  $('tab-' + b.dataset.tab).classList.add('activo');
+  if (b.dataset.tab === 'dashboard') cargarDashboard();
+  if (b.dataset.tab === 'auditoria') cargarAuditoria();
+  if (b.dataset.tab === 'entregas') cargarEntregas();
+});
+
+function hora(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
+}
+function fechaHora(iso) {
+  return iso ? new Date(iso).toLocaleString('es-CO') : '—';
+}
+
+// ---- Dashboard ----
+async function cargarDashboard() {
+  const d = await api('/api/dashboard');
+  $('stats').innerHTML = `
+    <div class="stat"><div class="valor">${d.turnos_hoy}</div><div class="nombre">Turnos hoy</div></div>
+    <div class="stat"><div class="valor">${d.pendientes}</div><div class="nombre">Pendientes</div></div>
+    <div class="stat"><div class="valor">${d.atendidos}</div><div class="nombre">Atendidos</div></div>
+    <div class="stat"><div class="valor">${d.no_presentados}</div><div class="nombre">No presentados</div></div>
+    <div class="stat"><div class="valor">${d.espera_promedio_min}<span style="font-size:1rem;"> min</span></div><div class="nombre">Espera promedio</div></div>
+    <div class="stat"><div class="valor">${Number(d.items_inventario).toLocaleString('es-CO')}</div><div class="nombre">Unidades en inventario</div></div>`;
+  const hoy = new Date().toISOString().slice(0, 10);
+  $('cuerpo-vencimientos').innerHTML = d.proximos_a_vencer.length ? d.proximos_a_vencer.map(l => `<tr>
+    <td>${l.nombre} ${l.concentracion} (${l.presentacion})</td>
+    <td>${l.lote}</td><td class="num">${l.cantidad}</td>
+    <td class="num ${l.fecha_vencimiento < hoy ? 'vencido' : 'porvencer'}">${l.fecha_vencimiento}${l.fecha_vencimiento < hoy ? ' ⚠ VENCIDO' : ''}</td>
+  </tr>`).join('') : '<tr><td colspan="4">✅ Nada próximo a vencer.</td></tr>';
+  $('cuerpo-entregas-dash').innerHTML = d.entregas_recientes.map(e => `<tr>
+    <td><b>${e.codigo}</b></td><td class="num">${pad(e.numero_turno)}</td>
+    <td>${e.paciente.tipo_documento} ${e.paciente.numero_documento}${e.paciente.nombre ? ' — ' + e.paciente.nombre : ''}</td>
+    <td class="num">${e.num_items}</td><td class="num">${fechaHora(e.fecha)}</td>
+  </tr>`).join('') || '<tr><td colspan="5">Aún no hay entregas.</td></tr>';
+}
+
+// ---- Turnos ----
+async function cargarTurnos() {
+  const fecha = $('filtro-fecha').value;
+  turnosCache = await api('/api/turnos' + (fecha ? `?fecha=${fecha}` : ''));
+  pintarTurnos();
+}
+
+function limpiarFiltros() {
+  $('filtro-texto').value = '';
+  $('filtro-estado').value = '';
+  $('filtro-fecha').value = '';
+  cargarTurnos();
+}
+
+function badgeFormula(t) {
+  if (!t.num_formulas) return '<span class="badge FINALIZADO">Sin fórmula</span>';
+  if (t.ocr_estado === 'PROCESADA') return '<span class="badge ok">📄 OCR listo</span>';
+  if (t.ocr_estado === 'ERROR') return '<span class="badge err">📄 OCR error</span>';
+  return '<span class="badge warn">📄 Pendiente OCR</span>';
+}
+
+function pintarTurnos() {
+  const texto = $('filtro-texto').value.trim().toLowerCase();
+  const filtroEstado = $('filtro-estado').value;
+  const filtrados = turnosCache.filter(t => {
+    if (texto && !(
+      String(t.numero_documento).toLowerCase().includes(texto) ||
+      String(t.paciente_nombre || '').toLowerCase().includes(texto) ||
+      pad(t.numero).includes(texto) || String(t.numero) === texto)) return false;
+    if (filtroEstado) return t.estado === filtroEstado;
+    return true;
+  });
+  $('cuerpo-turnos').innerHTML = filtrados.length ? filtrados.map(t => {
+    const acciones = [];
+    if (['ESPERANDO', 'CREADO', 'NO_PRESENTADO'].includes(t.estado))
+      acciones.push(`<button class="accion primario" onclick="llamar(${t.id})">📣 Llamar</button>`);
+    if (['LLAMANDO', 'DESPACHO'].includes(t.estado))
+      acciones.push(`<button class="accion" onclick="abrirDespacho(${t.id})">💊 Despachar</button>`);
+    if (t.estado === 'LLAMANDO')
+      acciones.push(`<button class="accion peligro" onclick="noPresentado(${t.id})">No presentado</button>`);
+    if (['ENTREGADO', 'FINALIZADO'].includes(t.estado) && t.entrega_codigo)
+      acciones.push(`<button class="accion" onclick="verComprobante(${t.id})">🧾 Comprobante</button>`);
+    return `<tr>
+      <td class="num"><b>${pad(t.numero)}</b></td>
+      <td>${t.tipo_documento} ${t.numero_documento}${t.paciente_nombre ? '<br><span class="hint">' + t.paciente_nombre + '</span>' : ''}</td>
+      <td>${badgeFormula(t)}</td>
+      <td class="num">${hora(t.timestamp)}</td>
+      <td class="num">${hora(t.llamado_en)}</td>
+      <td><span class="badge ${t.estado}">${t.estado.replace('_', ' ')}</span></td>
+      <td class="num">${t.modulo_asignado ?? '—'}</td>
+      <td>${acciones.join('')}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="8">No hay turnos que coincidan con el filtro.</td></tr>';
+}
+
+let turnoALlamar = null;
+function llamar(id) {
+  turnoALlamar = id;
+  const max = Number(config.num_modulos) || 3;
+  $('botones-modulo').innerHTML = Array.from({ length: max }, (_, i) =>
+    `<button class="accion primario" style="font-size:1.2rem;padding:.7rem 1.4rem;"
+       onclick="confirmarLlamado(${i + 1})">Módulo ${i + 1}</button>`).join('');
+  $('modal-modulo').classList.add('abierto');
+}
+
+async function confirmarLlamado(modulo) {
+  cerrarModal('modal-modulo');
+  await api(`/api/turnos/${turnoALlamar}/estado`, {
+    method: 'PUT',
+    body: JSON.stringify({ estado: 'LLAMANDO', modulo_asignado: modulo }),
+  });
+}
+
+async function noPresentado(id) {
+  if (!confirm('¿Marcar como NO PRESENTADO?')) return;
+  await api(`/api/turnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: 'NO_PRESENTADO' }) });
+}
+
+function abrirNuevoTurno() { $('modal-nuevo').classList.add('abierto'); }
+
+async function crearTurnoManual() {
+  await api('/api/turnos', {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo_documento: $('nuevo-tipo').value,
+      numero_documento: $('nuevo-doc').value.trim(),
+      nombre: $('nuevo-nombre').value.trim() || null,
+      telefono: $('nuevo-tel').value.trim() || null,
+    }),
+  });
+  cerrarModal('modal-nuevo');
+}
+
+// ---- Despacho ----
+let despachoTurno = null;
+let despachoItems = []; // [{medicamento_id, etiqueta, stock, cantidad, solicitado}]
+
+async function abrirDespacho(id) {
+  despachoTurno = turnosCache.find(t => t.id === id) || await api(`/api/turnos/${id}`);
+  despachoItems = [];
+  if (despachoTurno.estado === 'LLAMANDO') {
+    await api(`/api/turnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: 'DESPACHO' }) });
+  }
+  $('desp-turno-num').textContent = pad(despachoTurno.numero);
+  $('desp-paciente').textContent =
+    `${despachoTurno.tipo_documento} ${despachoTurno.numero_documento}` +
+    (despachoTurno.paciente_nombre ? ` — ${despachoTurno.paciente_nombre}` : '');
+  $('desp-agregar-med').innerHTML = medicamentos.map(m =>
+    `<option value="${m.id}">${m.nombre} ${m.concentracion} (${m.presentacion}) — stock ${m.stock}</option>`).join('');
+  await pintarFormulas(id);
+  pintarItemsDespacho();
+  $('modal-despacho').classList.add('abierto');
+}
+
+async function pintarFormulas(turnoId) {
+  const formulas = await api(`/api/formulas/${turnoId}`);
+  if (!formulas.length) {
+    $('desp-formulas').innerHTML = '<p class="hint">El paciente no ha adjuntado fórmula. Puedes registrar los medicamentos manualmente abajo.</p>';
+    return;
+  }
+  $('desp-formulas').innerHTML = formulas.map(f => {
+    let ocr = '';
+    if (f.ocr_estado === 'PROCESADA' && f.ocr_json) {
+      const j = JSON.parse(f.ocr_json);
+      ocr = `<p class="hint">🤖 OCR: ${j.medicamentos.length} medicamentos detectados.
+        ${j.observaciones ? 'Observaciones: ' + j.observaciones : ''}</p>
+        <button class="accion" onclick="usarOcr(${f.id})">↩ Cargar medicamentos detectados</button>`;
+    } else if (f.ocr_estado === 'ERROR') {
+      ocr = `<p class="hint" style="color:var(--rojo);">OCR falló: ${f.ocr_error || ''}</p>
+        <button class="accion primario" onclick="ejecutarOcr(${f.id})">🤖 Reintentar OCR</button>`;
+    } else {
+      ocr = `<button class="accion primario" onclick="ejecutarOcr(${f.id})">🤖 Leer fórmula con IA (OCR)</button>`;
+    }
+    return `<div style="margin-bottom:.8rem;">
+      <details><summary style="cursor:pointer;">📄 Fórmula del ${fechaHora(f.fecha)} — ver imagen</summary>
+        <img class="formula" src="/api/formulas/${f.id}/imagen" loading="lazy" style="margin-top:.5rem;">
+      </details>
+      ${ocr}
+    </div>`;
+  }).join('');
+}
+
+async function ejecutarOcr(formulaId) {
+  $('desp-formulas').innerHTML = '<p class="hint">🤖 Procesando fórmula con OpenAI Vision… (puede tardar unos segundos)</p>';
+  try {
+    const r = await api(`/api/formulas/${formulaId}/ocr`, { method: 'POST' });
+    cargarValidacion(r.validacion);
+  } catch (e) { /* el alert ya se mostró */ }
+  await pintarFormulas(despachoTurno.id);
+}
+
+async function usarOcr(formulaId) {
+  const formulas = await api(`/api/formulas/${despachoTurno.id}`);
+  const f = formulas.find(x => x.id === formulaId);
+  if (!f || !f.ocr_json) return;
+  const j = JSON.parse(f.ocr_json);
+  const validacion = await api('/api/validar', {
+    method: 'POST', body: JSON.stringify({ medicamentos: j.medicamentos }),
+  });
+  cargarValidacion(validacion);
+}
+
+function cargarValidacion(validacion) {
+  despachoItems = validacion.map(v => ({
+    medicamento_id: v.medicamento_id,
+    etiqueta: v.medicamento,
+    stock: v.stock,
+    cantidad: v.solicitado.cantidad,
+    solicitado: `${v.solicitado.nombre} ${v.solicitado.concentracion}`.trim(),
+    disponible: v.disponible,
+  }));
+  pintarItemsDespacho();
+}
+
+function pintarItemsDespacho() {
+  $('desp-items').innerHTML = despachoItems.length ? despachoItems.map((it, i) => `<tr>
+    <td>${it.solicitado || '—'}</td>
+    <td>${it.medicamento_id
+      ? it.etiqueta
+      : '<span class="badge err">❌ No está en el catálogo</span>'}</td>
+    <td class="num">${it.medicamento_id ? (it.disponible !== false ? it.stock : `<span class="vencido">${it.stock}</span>`) : '—'}</td>
+    <td style="width:90px;"><input type="number" min="1" value="${it.cantidad}"
+      onchange="despachoItems[${i}].cantidad = Number(this.value)"></td>
+    <td><button class="accion peligro" onclick="despachoItems.splice(${i},1);pintarItemsDespacho()">🗑</button></td>
+  </tr>`).join('') : '<tr><td colspan="5">Sin medicamentos aún. Usa el OCR o agrégalos manualmente.</td></tr>';
+}
+
+function agregarItemManual() {
+  const id = Number($('desp-agregar-med').value);
+  const m = medicamentos.find(x => x.id === id);
+  if (!m) return;
+  despachoItems.push({
+    medicamento_id: m.id,
+    etiqueta: `${m.nombre} ${m.concentracion} (${m.presentacion})`,
+    stock: m.stock,
+    cantidad: Number($('desp-agregar-cant').value) || 1,
+    solicitado: '(manual)',
+    disponible: true,
+  });
+  pintarItemsDespacho();
+}
+
+async function confirmarEntrega() {
+  const items = despachoItems.filter(i => i.medicamento_id && i.cantidad > 0)
+    .map(i => ({ medicamento_id: i.medicamento_id, cantidad: i.cantidad }));
+  if (!items.length) return alert('No hay medicamentos válidos para entregar.');
+  const sinMatch = despachoItems.filter(i => !i.medicamento_id).length;
+  const msg = `¿Confirmar la entrega de ${items.length} medicamento(s)?` +
+    (sinMatch ? `\n(Se omitirán ${sinMatch} ítems sin coincidencia en el catálogo)` : '');
+  if (!confirm(msg)) return;
+  const comprobante = await api('/api/entregas', {
+    method: 'POST',
+    body: JSON.stringify({ turno_id: despachoTurno.id, items, usuario: 'panel' }),
+  });
+  cerrarModal('modal-despacho');
+  pintarComprobante(comprobante);
+}
+
+// ---- Comprobantes ----
+let comprobanteActual = null;
+
+function pintarComprobante(c) {
+  comprobanteActual = c;
+  $('comp-codigo').textContent = c.id;
+  $('comp-datos').textContent =
+    `Turno ${pad(c.numero_turno)} · ${c.paciente.tipo_documento} ${c.paciente.numero_documento}` +
+    (c.paciente.nombre ? ` — ${c.paciente.nombre}` : '') +
+    ` · ${fechaHora(c.fecha)} · entregó: ${c.entregado_por}`;
+  $('comp-detalle').innerHTML = c.medicamentos.map(m => `<tr>
+    <td>${m.nombre}</td><td class="num">${m.cantidad}</td>
+    <td class="hint">${m.lotes.map(l => `${l.lote} (x${l.cantidad}, vence ${l.fecha_vencimiento})`).join('<br>')}</td>
+  </tr>`).join('');
+  $('comp-firma').textContent = `Firma HMAC-SHA256: ${(c.firma || '').slice(0, 32)}…`;
+  $('modal-comprobante').classList.add('abierto');
+}
+
+async function verComprobante(turnoId) {
+  pintarComprobante(await api(`/api/entregas/${turnoId}`));
+}
+
+function descargarComprobante() {
+  if (!comprobanteActual) return;
+  const blob = new Blob([JSON.stringify(comprobanteActual, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${comprobanteActual.id}-turno-${pad(comprobanteActual.numero_turno)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function cargarEntregas() {
+  const entregas = await api('/api/entregas');
+  $('cuerpo-entregas').innerHTML = entregas.length ? entregas.map(e => `<tr>
+    <td><b>${e.codigo}</b></td>
+    <td class="num">${pad(e.numero_turno)}</td>
+    <td>${e.paciente.tipo_documento} ${e.paciente.numero_documento}${e.paciente.nombre ? ' — ' + e.paciente.nombre : ''}</td>
+    <td class="num">${e.num_items}</td>
+    <td>${e.usuario || '—'}</td>
+    <td class="num">${fechaHora(e.fecha)}</td>
+    <td><button class="accion" onclick="verComprobante(${e.turno_id})">🧾 Ver</button></td>
+  </tr>`).join('') : '<tr><td colspan="7">Aún no hay entregas registradas.</td></tr>';
+}
+
+// ---- Medicamentos ----
+async function cargarMedicamentos() {
+  medicamentos = await api('/api/medicamentos');
+  $('cuerpo-medicamentos').innerHTML = medicamentos.map(m => `<tr>
+    <td><input id="mc-${m.id}" value="${m.codigo}" style="width:100px;"></td>
+    <td><input id="mn-${m.id}" value="${m.nombre}"></td>
+    <td><input id="mp-${m.id}" value="${m.principio_activo}"></td>
+    <td><input id="mo-${m.id}" value="${m.concentracion}" style="width:90px;"></td>
+    <td><input id="mr-${m.id}" value="${m.presentacion}" style="width:100px;"></td>
+    <td><input id="ml-${m.id}" value="${m.laboratorio || ''}" style="width:100px;"></td>
+    <td class="num"><b>${m.stock}</b></td>
+    <td style="white-space:nowrap;">
+      <button class="accion primario" onclick="guardarMedicamento(${m.id})">Guardar</button>
+      <button class="accion peligro" onclick="eliminarMedicamento(${m.id})">🗑</button>
+    </td>
+  </tr>`).join('');
+  // Selector del formulario de lotes
+  $('nlote-med').innerHTML = medicamentos.map(m =>
+    `<option value="${m.id}">${m.codigo} — ${m.nombre} ${m.concentracion} (${m.presentacion})</option>`).join('');
+}
+
+async function guardarMedicamento(id) {
+  await api(`/api/medicamentos/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      codigo: $(`mc-${id}`).value.trim(),
+      nombre: $(`mn-${id}`).value.trim(),
+      principio_activo: $(`mp-${id}`).value.trim(),
+      concentracion: $(`mo-${id}`).value.trim(),
+      presentacion: $(`mr-${id}`).value.trim(),
+      laboratorio: $(`ml-${id}`).value.trim(),
+    }),
+  });
+}
+
+async function agregarMedicamento() {
+  const body = {
+    codigo: $('nmed-codigo').value.trim(),
+    nombre: $('nmed-nombre').value.trim(),
+    principio_activo: $('nmed-principio').value.trim(),
+    concentracion: $('nmed-conc').value.trim(),
+    presentacion: $('nmed-pres').value.trim(),
+    laboratorio: $('nmed-lab').value.trim(),
+  };
+  if (!body.codigo || !body.nombre || !body.concentracion || !body.presentacion) {
+    return alert('Código, nombre, concentración y presentación son obligatorios.');
+  }
+  await api('/api/medicamentos', { method: 'POST', body: JSON.stringify(body) });
+  for (const id of ['nmed-codigo', 'nmed-nombre', 'nmed-principio', 'nmed-conc', 'nmed-pres', 'nmed-lab']) $(id).value = '';
+  await cargarMedicamentos();
+}
+
+async function eliminarMedicamento(id) {
+  if (!confirm('¿Eliminar este medicamento? Si tiene movimientos históricos solo se ocultará.')) return;
+  await api(`/api/medicamentos/${id}`, { method: 'DELETE' });
+  await cargarMedicamentos();
+}
+
+// ---- Inventario ----
+async function cargarInventario() {
+  const inv = await api('/api/inventario');
+  const hoy = new Date().toISOString().slice(0, 10);
+  $('cuerpo-inventario').innerHTML = inv.length ? inv.map(l => `<tr>
+    <td>${l.nombre} ${l.concentracion} (${l.presentacion})</td>
+    <td>${l.lote}</td>
+    <td style="width:120px;"><input class="num" type="number" min="0" id="lc-${l.id}" value="${l.cantidad}"></td>
+    <td class="num ${l.fecha_vencimiento < hoy ? 'vencido' : ''}">${l.fecha_vencimiento}</td>
+    <td><button class="accion primario" onclick="guardarLote(${l.id})">Guardar ajuste</button></td>
+  </tr>`).join('') : '<tr><td colspan="5">Inventario vacío. Registra la primera entrada arriba.</td></tr>';
+}
+
+async function agregarLote() {
+  const body = {
+    medicamento_id: Number($('nlote-med').value),
+    lote: $('nlote-lote').value.trim(),
+    cantidad: Number($('nlote-cant').value),
+    fecha_vencimiento: $('nlote-venc').value,
+  };
+  if (!body.lote || !(body.cantidad > 0) || !body.fecha_vencimiento) {
+    return alert('Lote, cantidad y fecha de vencimiento son obligatorios.');
+  }
+  await api('/api/inventario', { method: 'POST', body: JSON.stringify(body) });
+  $('nlote-lote').value = ''; $('nlote-cant').value = '';
+  await cargarInventario(); await cargarMedicamentos();
+}
+
+async function guardarLote(id) {
+  await api(`/api/inventario/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ cantidad: Number($(`lc-${id}`).value) }),
+  });
+  await cargarInventario(); await cargarMedicamentos();
+}
+
+// ---- Auditoría ----
+async function cargarAuditoria() {
+  const regs = await api('/api/auditoria');
+  $('cuerpo-auditoria').innerHTML = regs.length ? regs.map(r => `<tr>
+    <td class="num">${fechaHora(r.fecha)}</td><td>${r.actor}</td>
+    <td><b>${r.accion}</b></td><td class="hint">${r.detalle || ''}</td>
+  </tr>`).join('') : '<tr><td colspan="4">Sin registros aún.</td></tr>';
+}
+
+// ---- Config ----
+function pintarPines() {
+  const p = config.pines_sesion || {};
+  const nombres = { despachador: '💊 Despachador', admin: '🛡 Administrador', kiosko: '📺 Kiosko (TV / turnos)' };
+  $('cuerpo-pines').innerHTML = Object.keys(nombres).map(rol => `<tr>
+    <td>${nombres[rol]}</td>
+    <td><b style="font-size:1.2rem;letter-spacing:.15em;">${p[rol] || '—'}</b></td>
+  </tr>`).join('');
+  $('conexion').innerHTML =
+    `Servidor: <b>http://${config.ip}:${config.puerto}</b> &nbsp;|&nbsp; ` +
+    `PIN — despachador: <b>${p.despachador}</b> · admin: <b>${p.admin}</b> · kiosko: <b>${p.kiosko}</b>`;
+}
+
+async function cargarConfig() {
+  config = await api('/api/config');
+  $('cfg-nombre').value = config.nombre_centro || '';
+  $('cfg-timeout').value = config.timeout_minutos || 5;
+  $('cfg-modulos').value = config.num_modulos || 3;
+  $('cfg-dias-venc').value = config.dias_alerta_vencimiento || 60;
+  $('cfg-openai-key').value = config.openai_api_key || '';
+  $('cfg-openai-modelo').value = config.openai_modelo || 'gpt-4o-mini';
+  $('cfg-marquesina-vel').value = config.marquesina_velocidad || 45;
+  $('cfg-marquesina-msg').value = config.marquesina_mensaje || '';
+  pintarPines();
+  $('instrucciones-app').innerHTML =
+    `La app Android <b>detecta este servidor automáticamente</b> (misma red WiFi o hotspot de este equipo). ` +
+    `Al abrirla, cada dispositivo elige su rol:<br>` +
+    `&nbsp;• <b>Paciente</b>: conecta sin PIN, se identifica con su documento y puede adjuntar su fórmula.<br>` +
+    `&nbsp;• <b>Despachador / Kiosko</b>: ingresan una sola vez el PIN de sesión de arriba ` +
+    `y quedan emparejados hasta que revoques su acceso.<br>` +
+    `Si la detección automática falla, la IP es <b>${config.ip}</b> y el puerto <b>${config.puerto}</b>.`;
+  await cargarDispositivos();
+}
+
+async function guardarConfig() {
+  await api('/api/config', {
+    method: 'PUT',
+    body: JSON.stringify({
+      nombre_centro: $('cfg-nombre').value.trim(),
+      timeout_minutos: Number($('cfg-timeout').value) || 5,
+      num_modulos: Number($('cfg-modulos').value) || 3,
+      dias_alerta_vencimiento: Number($('cfg-dias-venc').value) || 60,
+      openai_api_key: $('cfg-openai-key').value.trim(),
+      openai_modelo: $('cfg-openai-modelo').value.trim() || 'gpt-4o-mini',
+      marquesina_velocidad: Number($('cfg-marquesina-vel').value) || 45,
+      marquesina_mensaje: $('cfg-marquesina-msg').value.trim(),
+    }),
+  });
+  await cargarConfig();
+  alert('Configuración guardada.');
+}
+
+async function regenerarPines() {
+  if (!confirm('¿Generar nuevos PINs de sesión? Los actuales dejarán de servir para emparejar (los dispositivos ya emparejados no se afectan).')) return;
+  const r = await api('/api/config/regenerar-pines', { method: 'POST' });
+  config.pines_sesion = r.pines_sesion;
+  pintarPines();
+}
+
+async function cargarDispositivos() {
+  const dispositivos = await api('/api/dispositivos');
+  const roles = { despachador: '💊 Despachador', admin: '🛡 Admin', kiosko: '📺 Kiosko' };
+  $('cuerpo-dispositivos').innerHTML = dispositivos.length ? dispositivos.map(d => `<tr>
+    <td>${d.nombre || 'dispositivo'}</td>
+    <td>${roles[d.rol] || d.rol}</td>
+    <td>${fechaHora(d.creado)}</td>
+    <td>${fechaHora(d.ultimo_acceso)}</td>
+    <td>${d.activo ? '<span class="badge ok">ACTIVO</span>' : '<span class="badge err">REVOCADO</span>'}</td>
+    <td>${d.activo ? `<button class="accion peligro" onclick="revocarDispositivo(${d.id})">Revocar</button>` : ''}</td>
+  </tr>`).join('') : '<tr><td colspan="6">Aún no hay dispositivos emparejados.</td></tr>';
+}
+
+async function revocarDispositivo(id) {
+  if (!confirm('¿Revocar el acceso de este dispositivo? Dejará de funcionar de inmediato.')) return;
+  await api(`/api/dispositivos/${id}/revocar`, { method: 'POST' });
+  await cargarDispositivos();
+}
+
+function cerrarModal(id) { $(id).classList.remove('abierto'); cargarTurnos(); }
+
+// ---- WebSocket ----
+function conectarWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'turnos_updated') cargarTurnos();
+    if (msg.type === 'inventario_updated') { cargarMedicamentos(); cargarInventario(); }
+    if (msg.type === 'dispositivos_updated') cargarDispositivos();
+  };
+  ws.onclose = () => setTimeout(conectarWS, 3000);
+}
+
+cargarConfig(); cargarMedicamentos(); cargarInventario(); cargarTurnos(); cargarDashboard(); conectarWS();
+setInterval(cargarTurnos, 20000);
+setInterval(() => { if ($('tab-dashboard').classList.contains('activo')) cargarDashboard(); }, 30000);
+</script>
+</body>
+</html>

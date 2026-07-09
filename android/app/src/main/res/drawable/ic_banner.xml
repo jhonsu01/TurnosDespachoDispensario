@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Banner para launchers de Android TV (relación 16:9) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0E7490"
+        android:pathData="M0,0 h320 v180 h-320 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M148,50 h24 a4,4 0 0 1 4,4 v18 h18 a4,4 0 0 1 4,4 v24 a4,4 0 0 1 -4,4 h-18 v18 a4,4 0 0 1 -4,4 h-24 a4,4 0 0 1 -4,-4 v-18 h-18 a4,4 0 0 1 -4,-4 v-24 a4,4 0 0 1 4,-4 h18 v-18 a4,4 0 0 1 4,-4 Z" />
+</vector>
