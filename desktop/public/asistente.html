@@ -104,7 +104,9 @@
           <option value="FINALIZADO">Finalizado</option>
           <option value="NO_PRESENTADO">No presentado</option>
         </select></div>
-      <button class="accion" onclick="$('filtro-texto').value='';$('filtro-estado').value='';pintarTurnos()">Limpiar</button>
+      <div class="campo"><label>Fecha</label>
+        <input id="filtro-fecha" type="date" onchange="cargarTurnos()"></div>
+      <button class="accion" onclick="$('filtro-texto').value='';$('filtro-estado').value='';$('filtro-fecha').value='';cargarTurnos()">Limpiar</button>
     </div>
     <table>
       <thead><tr><th>Turno</th><th>Paciente</th><th>Fórmula</th><th>Estado</th><th>Módulo</th><th>Acciones</th></tr></thead>
@@ -324,7 +326,8 @@ function badgeFormula(t) {
 
 async function cargarTurnos() {
   if (!token) return;
-  turnosCache = await api('/api/turnos');
+  const fecha = $('filtro-fecha') ? $('filtro-fecha').value : '';
+  turnosCache = await api('/api/turnos' + (fecha ? `?fecha=${fecha}` : ''));
   pintarTurnos();
 }
 

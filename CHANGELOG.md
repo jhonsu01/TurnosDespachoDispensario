@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.1 — 2026-07-10
+
+- **App del paciente: hora local en el comprobante.** La fecha de entrega llegaba
+  en UTC del servidor; ahora se convierte a la zona horaria del teléfono
+  (comprobante en pantalla e historial "Mis entregas").
+- **El turno se cierra solo tras la entrega**: el paciente ya no tiene que tocar
+  "Terminar" — a los ~12 segundos de mostrar el comprobante, el turno pasa a
+  FINALIZADO automáticamente (el botón queda como "Terminar ahora" opcional).
+- El comprobante del paciente también muestra "⏳ quedan N pendientes" cuando la
+  entrega fue parcial por falta de stock.
+- **Asistente: filtro por fecha** con selector de calendario en la lista de turnos.
+
 ## v0.5.0 — 2026-07-10
 
 ### Entregas parciales y saldos pendientes (falta de stock)

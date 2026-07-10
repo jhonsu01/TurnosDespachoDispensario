@@ -1,7 +1,7 @@
 {
   "name": "turnos-dispensario-desktop",
   "productName": "Turnos Dispensario",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Servidor local + panel de administración del sistema de turnos y despacho de medicamentos con OCR e inventario",
   "main": "src/main.js",
   "author": "Jhon Supelano",

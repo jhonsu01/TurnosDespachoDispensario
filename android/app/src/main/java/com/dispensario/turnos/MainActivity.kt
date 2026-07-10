@@ -470,12 +470,19 @@ class MainActivity : AppCompatActivity() {
             "ENTREGADO" -> {
                 txtEstado.text = "MEDICAMENTOS ENTREGADOS ✓"
                 txtEstado.setTextColor(getColor(R.color.verde))
-                txtModulo.text = ""
+                txtModulo.text = "Este turno se cerrará solo en unos segundos"
                 if (estadoAnterior != "ENTREGADO") {
                     vibrar()
                     mostrarComprobante()
+                    // El turno se cierra solo: el paciente no tiene que tocar "Terminar"
+                    val turnoDeEsteCierre = turnoActivo
+                    ui.postDelayed({
+                        if (turnoActivo == turnoDeEsteCierre && estadoAnterior == "ENTREGADO") {
+                            terminarTurnoCliente()
+                        }
+                    }, 12000)
                 }
-                btnNuevo.text = "Terminar"
+                btnNuevo.text = "Terminar ahora"
                 btnNuevo.visibility = View.VISIBLE
             }
             "FINALIZADO" -> {
@@ -502,6 +509,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.imgQr).setImageBitmap(generarQr(t.getString("qr_code")))
     }
 
+    /** Convierte una fecha ISO UTC del servidor a hora local legible. */
+    private fun fechaLocal(iso: String): String = try {
+        val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
+        java.text.SimpleDateFormat("dd/MM/yyyy h:mm a", java.util.Locale("es"))
+            .format(parser.parse(iso.substring(0, 19))!!)
+    } catch (e: Exception) {
+        iso
+    }
+
     /** Al ENTREGADO: consulta el comprobante y lo muestra. */
     private fun mostrarComprobante() {
         val cliente = api ?: return
@@ -515,8 +532,11 @@ class MainActivity : AppCompatActivity() {
                     for (i in 0 until meds.length()) {
                         val m = meds.getJSONObject(i)
                         sb.append("• ${m.getString("nombre")}: ${m.getInt("cantidad")} und\n")
+                        if (m.optInt("pendiente", 0) > 0) {
+                            sb.append("   ⏳ quedan ${m.getInt("pendiente")} pendientes por stock\n")
+                        }
                     }
-                    sb.append("\nEntregado: ${c.getString("fecha").substring(0, 16).replace('T', ' ')}")
+                    sb.append("\nEntregado: ${fechaLocal(c.getString("fecha"))}")
                     val txt = findViewById<TextView>(R.id.txtComprobante)
                     txt.text = sb.toString()
                     txt.visibility = View.VISIBLE
@@ -557,17 +577,7 @@ class MainActivity : AppCompatActivity() {
                     for (i in 0 until entregas.length()) {
                         val e = entregas.getJSONObject(i)
                         sb.append("🧾 ${e.getString("codigo")} — turno %03d\n".format(e.getInt("numero_turno")))
-                        // Fecha y hora locales de la entrega
-                        val fechaIso = e.optString("fecha", "")
-                        val fechaLegible = try {
-                            val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
-                            parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
-                            val fecha = parser.parse(fechaIso.substring(0, 19))
-                            java.text.SimpleDateFormat("dd/MM/yyyy h:mm a", java.util.Locale("es")).format(fecha!!)
-                        } catch (ex: Exception) {
-                            e.optString("fecha_turno", "")
-                        }
-                        sb.append("📅 Entregado: $fechaLegible\n")
+                        sb.append("📅 Entregado: ${fechaLocal(e.optString("fecha", ""))}\n")
                         val meds = e.getJSONArray("medicamentos")
                         for (j in 0 until meds.length()) {
                             val m = meds.getJSONObject(j)
