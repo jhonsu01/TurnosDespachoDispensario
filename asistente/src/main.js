@@ -34,26 +34,37 @@ function guardarServidor(ip, puerto) {
 function descubrirServidor(timeoutMs = 4000) {
   return new Promise((resolve) => {
     const socket = dgram.createSocket('udp4');
-    const timer = setTimeout(() => { try { socket.close(); } catch (e) {} resolve(null); }, timeoutMs);
+    let cerrado = false;
+    const reenvios = [];
+    const terminar = (resultado) => {
+      if (cerrado) return;
+      cerrado = true;
+      reenvios.forEach(clearTimeout);
+      try { socket.close(); } catch (e) { /* ya cerrado */ }
+      resolve(resultado);
+    };
+    const timer = setTimeout(() => terminar(null), timeoutMs);
     socket.on('message', (msg) => {
       try {
         const d = JSON.parse(msg.toString());
         if (d.tipo === 'DISPENSARIO_SERVER' && d.ip) {
           clearTimeout(timer);
-          try { socket.close(); } catch (e) {}
-          resolve({ ip: d.ip, puerto: d.puerto || 3000 });
+          terminar({ ip: d.ip, puerto: d.puerto || 3000 });
         }
       } catch (e) { /* paquete ajeno */ }
     });
     socket.bind(() => {
       socket.setBroadcast(true);
       const datos = Buffer.from('DISPENSARIO_DISCOVER');
-      const enviar = () => socket.send(datos, PUERTO_DISCOVERY, '255.255.255.255', () => {});
+      // Los reenvíos verifican que el socket siga vivo (evita ERR_SOCKET_DGRAM_NOT_RUNNING)
+      const enviar = () => {
+        if (cerrado) return;
+        try { socket.send(datos, PUERTO_DISCOVERY, '255.255.255.255', () => {}); } catch (e) { /* socket cerrado */ }
+      };
       enviar();
-      setTimeout(enviar, 1200);
-      setTimeout(enviar, 2400);
+      reenvios.push(setTimeout(enviar, 1200), setTimeout(enviar, 2400));
     });
-    socket.on('error', () => { clearTimeout(timer); resolve(null); });
+    socket.on('error', () => { clearTimeout(timer); terminar(null); });
   });
 }
 

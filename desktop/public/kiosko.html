@@ -10,35 +10,45 @@
     --cian: #22D3EE; --amarillo: #FACC15; --gris: #64748B;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+  /* Todo dimensionado con vh/clamp para encajar en la pantalla SIN desplazamientos
+     (TVs y tablets en modo kiosko): el teclado, el botón y el ticket siempre visibles. */
+  html, body { height: 100%; overflow: hidden; }
   body {
-    background: var(--bg); color: var(--texto); min-height: 100vh;
+    background: var(--bg); color: var(--texto);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    padding: 1.5rem; text-align: center;
+    padding: 1vh 1rem; text-align: center;
   }
-  h1 { font-size: 2rem; margin-bottom: .4rem; }
-  .sub { color: var(--gris); margin-bottom: 1.6rem; font-size: 1.1rem; }
-  .panel { background: var(--panel); border-radius: 18px; padding: 2rem; width: min(560px, 94vw); }
+  h1 { font-size: clamp(1.1rem, 4vh, 2rem); margin-bottom: .2vh; }
+  .sub { color: var(--gris); margin-bottom: 1.2vh; font-size: clamp(.85rem, 2.4vh, 1.1rem); }
+  .panel {
+    background: var(--panel); border-radius: 16px; padding: clamp(.7rem, 2vh, 1.6rem);
+    width: min(520px, 92vw); max-height: 88vh; overflow: hidden;
+  }
   .doc {
-    font-size: 2.4rem; letter-spacing: .2em; background: #0B1117; border-radius: 12px;
-    padding: .8rem 1rem; min-height: 4.4rem; margin-bottom: 1.2rem; font-variant-numeric: tabular-nums;
-    border: 2px solid #1E293B;
+    font-size: clamp(1.3rem, 4.5vh, 2.2rem); letter-spacing: .18em; background: #0B1117; border-radius: 10px;
+    padding: .6vh .8rem; min-height: 7vh; margin-bottom: 1.2vh; font-variant-numeric: tabular-nums;
+    border: 2px solid #1E293B; display: flex; align-items: center; justify-content: center;
   }
-  .teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: .7rem; }
+  .teclado { display: grid; grid-template-columns: repeat(3, 1fr); gap: min(.6rem, 1.2vh); }
   .teclado button {
-    font-size: 2rem; padding: 1rem 0; border: none; border-radius: 12px;
+    font-size: clamp(1.2rem, 4vh, 1.9rem); padding: min(1rem, 2.2vh) 0; border: none; border-radius: 10px;
     background: #1E293B; color: var(--texto); cursor: pointer;
   }
   .teclado button:active { background: var(--cian); color: var(--bg); }
   .solicitar {
-    margin-top: 1.2rem; width: 100%; font-size: 1.5rem; padding: 1.1rem 0;
-    border: none; border-radius: 12px; background: var(--cian); color: #06282E;
+    margin-top: 1.4vh; width: 100%; font-size: clamp(1.05rem, 3.2vh, 1.4rem); padding: min(1rem, 2.4vh) 0;
+    border: none; border-radius: 10px; background: var(--cian); color: #06282E;
     font-weight: 800; cursor: pointer;
   }
   #resultado { display: none; }
-  .num-turno { font-size: 6rem; font-weight: 800; color: var(--amarillo); font-variant-numeric: tabular-nums; }
-  #qr { margin: 1rem auto; background: white; padding: 12px; border-radius: 12px; width: fit-content; }
-  .pin { font-size: 1.4rem; color: var(--cian); letter-spacing: .15em; }
-  .aviso { color: var(--gris); margin-top: 1rem; font-size: 1rem; }
+  .num-turno {
+    font-size: clamp(3rem, 14vh, 5.5rem); font-weight: 800; color: var(--amarillo);
+    font-variant-numeric: tabular-nums; line-height: 1.05;
+  }
+  #qr { margin: 1vh auto; background: white; padding: 8px; border-radius: 10px; width: fit-content; }
+  #qr img, #qr canvas { width: clamp(90px, 20vh, 160px) !important; height: clamp(90px, 20vh, 160px) !important; }
+  .pin { font-size: clamp(1rem, 3vh, 1.3rem); color: var(--cian); letter-spacing: .15em; }
+  .aviso { color: var(--gris); margin-top: 1vh; font-size: clamp(.75rem, 2.2vh, .95rem); }
 </style>
 </head>
 <body>
@@ -114,7 +124,7 @@ async function solicitar() {
     $('turno-num').textContent = String(t.numero).padStart(3, '0');
     $('turno-pin').textContent = t.codigo_pin;
     $('qr').innerHTML = '';
-    try { new QRCode($('qr'), { text: t.qr_code, width: 180, height: 180 }); } catch (e) {}
+    try { new QRCode($('qr'), { text: t.qr_code, width: 150, height: 150 }); } catch (e) {}
     $('btn-imprimir').style.display = ticketDisponible ? 'block' : 'none';
     $('btn-imprimir').textContent = '🖨 Imprimir mi ticket';
     $('formulario').style.display = 'none';

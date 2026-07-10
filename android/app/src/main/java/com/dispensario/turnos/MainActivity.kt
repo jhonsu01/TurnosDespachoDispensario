@@ -763,19 +763,32 @@ class MainActivity : AppCompatActivity() {
             estadoTxt.textSize = 13f
             tarjeta.addView(estadoTxt)
 
-            val boton = Button(this)
-            boton.layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            // Aislamiento por módulo: los turnos llamados por OTRO módulo no se atienden aquí
+            val moduloTurno = if (t.isNull("modulo_asignado")) 0 else t.getInt("modulo_asignado")
+            val esMio = moduloTurno == 0 || moduloTurno == miModulo()
             if (estado == "ESPERANDO" || estado == "CREADO") {
-                boton.text = "📣 Llamar"
+                val boton = Button(this)
+                boton.layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                boton.text = "📣 Llamar a mi módulo (${miModulo()})"
                 boton.setOnClickListener { dialogoLlamar(t.getLong("id")) }
-            } else {
+                tarjeta.addView(boton)
+            } else if (esMio) {
+                val boton = Button(this)
+                boton.layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
                 boton.text = "💊 Despachar"
                 boton.setBackgroundColor(getColor(R.color.amarillo))
                 boton.setTextColor(getColor(R.color.fondo))
                 boton.setOnClickListener { abrirDetalleDespacho(t) }
+                tarjeta.addView(boton)
+            } else {
+                val aviso = TextView(this)
+                aviso.text = "Lo atiende el módulo $moduloTurno"
+                aviso.setTextColor(getColor(R.color.gris))
+                aviso.textSize = 13f
+                tarjeta.addView(aviso)
             }
-            tarjeta.addView(boton)
             contenedor.addView(tarjeta)
         }
         if (visibles == 0) {
@@ -1156,8 +1169,19 @@ class MainActivity : AppCompatActivity() {
         inputCantidad.hint = "Cantidad que entra *"
         inputCantidad.inputType = InputType.TYPE_CLASS_NUMBER
         contenedor.addView(inputCantidad)
+        // Vencimiento con selector de calendario (más práctico que digitar la fecha)
         val inputVence = EditText(this)
-        inputVence.hint = "Vencimiento (AAAA-MM-DD) *"
+        inputVence.hint = "📅 Fecha de vencimiento *"
+        inputVence.isFocusable = false
+        inputVence.isClickable = true
+        inputVence.setOnClickListener {
+            val cal = java.util.Calendar.getInstance()
+            cal.add(java.util.Calendar.YEAR, 1) // sugerencia inicial: un año adelante
+            android.app.DatePickerDialog(this, { _, anio, mes, dia ->
+                inputVence.setText("%04d-%02d-%02d".format(anio, mes + 1, dia))
+            }, cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH),
+                cal.get(java.util.Calendar.DAY_OF_MONTH)).show()
+        }
         contenedor.addView(inputVence)
 
         AlertDialog.Builder(this)
@@ -1168,7 +1192,7 @@ class MainActivity : AppCompatActivity() {
                 val cantidad = inputCantidad.text.toString().toIntOrNull() ?: 0
                 val vence = inputVence.text.toString().trim()
                 if (lote.isEmpty() || cantidad <= 0 || !Regex("^\\d{4}-\\d{2}-\\d{2}$").matches(vence)) {
-                    toast("Lote, cantidad (>0) y vencimiento AAAA-MM-DD son obligatorios")
+                    toast("Lote, cantidad (>0) y fecha de vencimiento son obligatorios")
                     return@setPositiveButton
                 }
                 io.execute {

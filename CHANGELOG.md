@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.4.0 — 2026-07-09
+
+### Correcciones
+- **Asistente**: corregido el error `ERR_SOCKET_DGRAM_NOT_RUNNING` al arrancar
+  (los reenvíos del autodescubrimiento UDP disparaban con el socket ya cerrado).
+- **Aislamiento por módulo**: un despachador/asistente ya no puede despachar los
+  turnos llamados por otro módulo (ni en la app Android ni en el Asistente);
+  se muestran como "Lo atiende el módulo N".
+
+### Mejoras
+- **Adjuntar fórmula desde el escritorio** (panel admin y Asistente): si el paciente
+  no la adjuntó, el modal de despacho permite 📷 tomar foto con la cámara
+  (con selector de dispositivos disponibles), 🖼 subir imagen o 📄 subir PDF
+  (renderizado local con pdf.js vendorizado, funciona offline).
+- **Inventario (app Android)**: la fecha de vencimiento del lote ahora usa un
+  selector de calendario (DatePicker) en lugar de digitarla.
+- **Kiosko de autoservicio ajustado a pantalla**: tamaños en función de la altura
+  (clamp/vh) para que el teclado, el botón de solicitar y la pantalla del ticket
+  encajen sin desplazamientos en TVs y tablets.
+
 ## v0.3.0 — 2026-07-09
 
 ### Nueva app: Dispensario Asistente (MSI)

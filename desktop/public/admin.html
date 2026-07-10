@@ -385,6 +385,8 @@
 </div>
 
 <script src="/zxing.min.js"></script>
+<script src="/pdf.min.js"></script>
+<script src="/adjuntar.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(3, '0');
@@ -555,10 +557,16 @@ async function abrirDespacho(id) {
   $('modal-despacho').classList.add('abierto');
 }
 
+function botonAdjuntar(turnoId) {
+  return `<button class="accion" onclick="AdjuntarFormula.abrir(${turnoId}, { onSubida: () => pintarFormulas(${turnoId}) })">📎 Adjuntar fórmula (cámara / imagen / PDF)</button>`;
+}
+
 async function pintarFormulas(turnoId) {
   const formulas = await api(`/api/formulas/${turnoId}`);
   if (!formulas.length) {
-    $('desp-formulas').innerHTML = '<p class="hint">El paciente no ha adjuntado fórmula. Puedes registrar los medicamentos manualmente abajo.</p>';
+    $('desp-formulas').innerHTML =
+      `<p class="hint">⚠ Sin fórmula adjunta: toda entrega la requiere. Adjúntala aquí si el paciente la trae en físico o en PDF.</p>
+       ${botonAdjuntar(turnoId)}`;
     return;
   }
   $('desp-formulas').innerHTML = formulas.map(f => {
@@ -582,7 +590,7 @@ async function pintarFormulas(turnoId) {
       </details>
       ${ocr}
     </div>`;
-  }).join('');
+  }).join('') + botonAdjuntar(turnoId);
 }
 
 async function ejecutarOcr(formulaId) {

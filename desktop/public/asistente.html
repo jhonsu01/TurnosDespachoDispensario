@@ -153,6 +153,8 @@
   </div>
 </div>
 
+<script src="/pdf.min.js"></script>
+<script src="/adjuntar.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(3, '0');
@@ -246,11 +248,16 @@ async function cargarTurnos() {
   turnosCache = await api('/api/turnos');
   $('cuerpo-turnos').innerHTML = turnosCache.length ? turnosCache.map(t => {
     const acciones = [];
+    // Aislamiento por módulo: los turnos llamados/en despacho de OTRO módulo
+    // se ven pero no se pueden atender desde aquí (cada asistente atiende su módulo)
+    const esMio = !t.modulo_asignado || Number(t.modulo_asignado) === Number(modulo);
     if (['ESPERANDO', 'CREADO', 'NO_PRESENTADO'].includes(t.estado))
       acciones.push(`<button class="accion primario" onclick="llamar(${t.id})">📣 Llamar a mi módulo</button>`);
-    if (['LLAMANDO', 'DESPACHO'].includes(t.estado))
-      acciones.push(`<button class="accion" onclick="abrirDespacho(${t.id})">💊 Despachar</button>`);
-    if (t.estado === 'LLAMANDO')
+    if (['LLAMANDO', 'DESPACHO'].includes(t.estado)) {
+      if (esMio) acciones.push(`<button class="accion" onclick="abrirDespacho(${t.id})">💊 Despachar</button>`);
+      else acciones.push(`<span class="hint">Lo atiende el módulo ${t.modulo_asignado}</span>`);
+    }
+    if (t.estado === 'LLAMANDO' && esMio)
       acciones.push(`<button class="accion peligro" onclick="noPresentado(${t.id})">No presentado</button>`);
     if (['ENTREGADO', 'FINALIZADO'].includes(t.estado) && t.entrega_codigo)
       acciones.push(`<button class="accion" onclick="verComprobante(${t.id})">🧾</button>`);
@@ -322,10 +329,16 @@ async function imagenFormula(formulaId, pagina, imgEl) {
   } catch (e) {}
 }
 
+function botonAdjuntar(turnoId) {
+  return `<button class="accion" onclick="AdjuntarFormula.abrir(${turnoId}, { token, onSubida: () => pintarFormulas(${turnoId}) })">📎 Adjuntar fórmula (cámara / imagen / PDF)</button>`;
+}
+
 async function pintarFormulas(turnoId) {
   const formulas = await api(`/api/formulas/${turnoId}`);
   if (!formulas.length) {
-    $('desp-formulas').innerHTML = '<p class="hint">⚠ Sin fórmula adjunta: no se puede despachar. Pide al paciente adjuntarla desde su app, o registra la fórmula desde la app de despachador.</p>';
+    $('desp-formulas').innerHTML =
+      `<p class="hint">⚠ Sin fórmula adjunta: no se puede despachar. Adjúntala aquí si el paciente la trae en físico o en PDF.</p>
+       ${botonAdjuntar(turnoId)}`;
     return;
   }
   $('desp-formulas').innerHTML = formulas.map(f => {
@@ -347,7 +360,7 @@ async function pintarFormulas(turnoId) {
       </details>
       ${ocr}
     </div>`;
-  }).join('');
+  }).join('') + botonAdjuntar(turnoId);
 }
 
 async function ejecutarOcr(formulaId) {
