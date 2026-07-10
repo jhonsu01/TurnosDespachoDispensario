@@ -1,8 +1,8 @@
 {
-  "name": "turnos-dispensario-desktop",
-  "productName": "Turnos Dispensario",
+  "name": "turnos-dispensario-asistente",
+  "productName": "Dispensario Asistente",
   "version": "0.3.0",
-  "description": "Servidor local + panel de administración del sistema de turnos y despacho de medicamentos con OCR e inventario",
+  "description": "Módulo de atención para asistentes del dispensario: solo turnos y despacho, conectado por red al servidor principal",
   "main": "src/main.js",
   "author": "Jhon Supelano",
   "license": "MIT",
@@ -10,24 +10,18 @@
     "start": "electron .",
     "dist": "electron-builder --win msi --publish never"
   },
-  "dependencies": {
-    "express": "^4.21.2",
-    "sql.js": "^1.13.0",
-    "ws": "^8.18.0"
-  },
   "devDependencies": {
     "electron": "^31.7.7",
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.dispensario.turnos",
-    "productName": "Turnos Dispensario",
+    "appId": "com.dispensario.asistente",
+    "productName": "Dispensario Asistente",
     "directories": {
       "output": "dist"
     },
     "files": [
-      "src/**/*",
-      "public/**/*"
+      "src/**/*"
     ],
     "win": {
       "target": [
@@ -39,7 +33,7 @@
       "oneClick": false,
       "perMachine": false,
       "runAfterFinish": true,
-      "artifactName": "TurnosDispensario-${version}.msi"
+      "artifactName": "TurnosDispensario-Asistente-${version}.msi"
     }
   }
 }

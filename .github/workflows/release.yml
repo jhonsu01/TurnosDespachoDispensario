@@ -39,15 +39,24 @@ jobs:
         working-directory: desktop
         run: npm ci
 
-      - name: Compilar MSI
+      - name: Compilar MSI (servidor + panel)
         working-directory: desktop
         run: npx electron-builder --win msi --publish never
 
-      - name: Renombrar MSI con el tag
+      - name: Instalar dependencias (asistente)
+        working-directory: asistente
+        run: npm ci
+
+      - name: Compilar MSI (asistente)
+        working-directory: asistente
+        run: npx electron-builder --win msi --publish never
+
+      - name: Renombrar MSIs con el tag
         shell: bash
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
           cp desktop/dist/*.msi "TurnosDispensario-${TAG}.msi"
+          cp asistente/dist/*.msi "TurnosDispensario-Asistente-${TAG}.msi"
 
       - uses: actions/upload-artifact@v4
         with:

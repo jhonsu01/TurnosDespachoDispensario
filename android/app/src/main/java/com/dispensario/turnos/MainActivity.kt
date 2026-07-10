@@ -687,8 +687,31 @@ class MainActivity : AppCompatActivity() {
     // ---------- ROL DESPACHADOR ----------
     private fun entrarDespacho() {
         mostrarVista(R.id.vistaDespacho)
-        iniciarPeriodica(5000) { refrescarTurnosDespacho() }
+        // Primera vez: el despachador elige su módulo de atención
+        if (prefs.getInt("modulo", 0) <= 0) elegirModulo() else iniciarPeriodica(5000) { refrescarTurnosDespacho() }
     }
+
+    /** Diálogo de selección del módulo en el que atiende este despachador. */
+    private fun elegirModulo() {
+        val input = EditText(this)
+        input.inputType = InputType.TYPE_CLASS_NUMBER
+        val actual = prefs.getInt("modulo", 1)
+        input.setText(actual.toString())
+        input.hint = "Número de módulo (ej: 1)"
+        AlertDialog.Builder(this)
+            .setTitle("💊 ¿En qué módulo vas a atender?")
+            .setMessage("Los turnos que llames y las entregas quedarán registrados con este módulo. Puedes cambiarlo tocando el encabezado.")
+            .setView(input)
+            .setCancelable(false)
+            .setPositiveButton("Aceptar") { _, _ ->
+                val m = input.text.toString().toIntOrNull() ?: 1
+                prefs.edit().putInt("modulo", if (m > 0) m else 1).apply()
+                iniciarPeriodica(5000) { refrescarTurnosDespacho() }
+            }
+            .show()
+    }
+
+    private fun miModulo(): Int = prefs.getInt("modulo", 1).coerceAtLeast(1)
 
     private fun refrescarTurnosDespacho() {
         val cliente = api ?: return
@@ -703,7 +726,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun pintarListaTurnos(turnos: JSONArray) {
-        estadoConexion("Servidor: ${prefs.getString("host", "")} · rol: despachador")
+        estadoConexion("Rol: despachador · Módulo ${miModulo()} (toca aquí para cambiarlo)")
+        findViewById<TextView>(R.id.txtEstadoConexion).setOnClickListener {
+            if (rolElegido == "despachador") elegirModulo()
+        }
         val contenedor = findViewById<LinearLayout>(R.id.listaTurnosDespacho)
         contenedor.removeAllViews()
         var visibles = 0
@@ -763,12 +789,13 @@ class MainActivity : AppCompatActivity() {
     private fun dialogoLlamar(turnoId: Long) {
         val input = EditText(this)
         input.inputType = InputType.TYPE_CLASS_NUMBER
+        input.setText(miModulo().toString()) // predeterminado: el módulo elegido al ingresar
         input.hint = "Número de módulo (ej: 1)"
         AlertDialog.Builder(this)
-            .setTitle("Llamar turno")
+            .setTitle("Llamar turno a tu módulo")
             .setView(input)
             .setPositiveButton("Llamar") { _, _ ->
-                val modulo = input.text.toString().toIntOrNull() ?: 1
+                val modulo = input.text.toString().toIntOrNull() ?: miModulo()
                 io.execute {
                     try {
                         api?.setEstado(turnoId, "LLAMANDO", modulo)
@@ -972,13 +999,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("Confirmar entrega")
+            .setTitle("Confirmar entrega — módulo ${miModulo()}")
             .setMessage("¿Entregar ${itemsEntrega.length()} medicamento(s) y generar el comprobante?\n" +
                 "Esta acción descuenta el inventario.")
             .setPositiveButton("Entregar") { _, _ ->
                 io.execute {
                     try {
-                        val c = cliente.registrarEntrega(turnoDespachoId, itemsEntrega)
+                        val c = cliente.registrarEntrega(turnoDespachoId, itemsEntrega, miModulo())
                         ui.post {
                             toast("Entrega ${c.getString("id")} registrada ✓")
                             entrarDespacho()

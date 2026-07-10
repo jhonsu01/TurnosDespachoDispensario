@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistente — Turnos Dispensario</title>
+<style>
+  :root {
+    --bg: #F3F6F8; --panel: #FFFFFF; --texto: #16232E; --borde: #DEE6EB;
+    --primario: #0E7490; --primario-osc: #155E75; --rojo: #DC2626; --gris: #64748B;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', system-ui, sans-serif; }
+  body { background: var(--bg); color: var(--texto); }
+  header {
+    background: #0C4A6E; color: white; padding: .9rem 1.5rem;
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem;
+  }
+  header h1 { font-size: 1.2rem; }
+  .conexion { font-size: .88rem; background: rgba(255,255,255,.12); padding: .4rem .8rem; border-radius: 6px; }
+  main { padding: 1.25rem; max-width: 1100px; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
+  th, td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid var(--borde); font-size: .9rem; }
+  th { background: #E0F2FE; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: #075985; }
+  .badge { padding: .2rem .6rem; border-radius: 99px; font-size: .74rem; font-weight: 700; white-space: nowrap; }
+  .ESPERANDO, .CREADO { background: #DBEAFE; color: #1E40AF; }
+  .LLAMANDO { background: #FEF9C3; color: #854D0E; }
+  .DESPACHO { background: #FEF3C7; color: #92400E; }
+  .ENTREGADO { background: #DCFCE7; color: #166534; }
+  .FINALIZADO { background: #E5E7EB; color: #374151; }
+  .NO_PRESENTADO { background: #FEE2E2; color: #991B1B; }
+  .ok { background: #DCFCE7; color: #166534; }
+  .warn { background: #FEF9C3; color: #854D0E; }
+  .err { background: #FEE2E2; color: #991B1B; }
+  button.accion {
+    border: 1px solid var(--borde); background: var(--panel); border-radius: 6px;
+    padding: .35rem .7rem; margin: 0 .12rem .2rem 0; cursor: pointer; font-size: .82rem;
+  }
+  button.accion:hover { background: #E0F2FE; border-color: var(--primario); }
+  button.primario { background: var(--primario); color: white; border: none; }
+  button.primario:hover { background: var(--primario-osc); }
+  button.peligro { color: var(--rojo); }
+  input, select {
+    padding: .5rem .6rem; border: 1px solid var(--borde); border-radius: 6px; font-size: .93rem; width: 100%;
+    background: white; color: var(--texto);
+  }
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .9rem; }
+  .campo label { display: block; font-size: .8rem; color: var(--gris); margin-bottom: .3rem; }
+  .card { background: var(--panel); border-radius: 10px; padding: 1.15rem; box-shadow: 0 1px 3px rgba(0,0,0,.07); margin-bottom: 1rem; }
+  .modal-fondo {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+    align-items: center; justify-content: center; z-index: 10;
+  }
+  .modal-fondo.abierto { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 1.4rem; width: min(720px, 94vw); max-height: 90vh; overflow: auto; }
+  .modal h3 { margin-bottom: .9rem; }
+  .fila-acciones { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.1rem; flex-wrap: wrap; }
+  .num { font-variant-numeric: tabular-nums; }
+  .hint { font-size: .8rem; color: var(--gris); margin-top: .35rem; }
+  img.formula { max-width: 100%; border-radius: 8px; border: 1px solid var(--borde); }
+  #login { max-width: 420px; margin: 8vh auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>💊 Turnos Dispensario — Módulo de atención</h1>
+  <div class="conexion" id="conexion">Sin conectar</div>
+</header>
+<main>
+  <!-- ============ LOGIN (PIN despachador + módulo) ============ -->
+  <div class="card" id="login">
+    <b>Ingreso del asistente</b>
+    <div class="hint">Pide al administrador el <b>PIN de sesión de Despachador</b> que muestra el panel principal.
+      El PIN se ingresa una sola vez en este equipo.</div>
+    <div class="form-grid" style="margin-top:.9rem;">
+      <div class="campo"><label>PIN de despachador</label><input id="login-pin" type="password" inputmode="numeric"></div>
+      <div class="campo"><label>Tu módulo de atención</label><select id="login-modulo"></select></div>
+      <div class="campo"><label>Tu nombre (para el registro)</label><input id="login-nombre" placeholder="Ej: Ana"></div>
+    </div>
+    <div class="fila-acciones"><button class="accion primario" onclick="ingresar()">Ingresar</button></div>
+    <p class="hint" id="login-msg"></p>
+  </div>
+
+  <!-- ============ TURNOS ============ -->
+  <div id="app" style="display:none;">
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.6rem;">
+      <b>Turnos de hoy</b>
+      <div>
+        <button class="accion primario" onclick="abrirNuevoTurno()">+ Asignar turno</button>
+        <button class="accion" onclick="cambiarModulo()">Módulo <span id="mi-modulo"></span> ▾</button>
+        <button class="accion peligro" onclick="salir()">Salir</button>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Turno</th><th>Paciente</th><th>Fórmula</th><th>Estado</th><th>Módulo</th><th>Acciones</th></tr></thead>
+      <tbody id="cuerpo-turnos"><tr><td colspan="6">Cargando…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+
+<!-- Modal despacho -->
+<div class="modal-fondo" id="modal-despacho">
+  <div class="modal">
+    <h3>Despacho — Turno <span id="desp-turno-num" class="num"></span></h3>
+    <p class="hint" id="desp-paciente"></p>
+    <div id="desp-formulas"></div>
+    <h4 style="margin-top:1rem;">Medicamentos a entregar</h4>
+    <p class="hint">Toda entrega requiere fórmula. Verifica contra la fórmula física antes de confirmar.</p>
+    <table style="margin-top:.5rem;">
+      <thead><tr><th>Solicitado</th><th>Medicamento</th><th>Stock</th><th>Cantidad</th><th></th></tr></thead>
+      <tbody id="desp-items"></tbody>
+    </table>
+    <div style="margin-top:.6rem;">
+      <div class="campo"><label>🔍 Buscar medicamento para agregar</label>
+        <input id="desp-buscar" autocomplete="off" oninput="buscarMedDespacho()"></div>
+      <div id="desp-resultados" style="display:flex;flex-direction:column;gap:.25rem;margin-top:.4rem;"></div>
+    </div>
+    <div class="fila-acciones">
+      <button class="accion" onclick="cerrarModal('modal-despacho')">Cerrar</button>
+      <button class="accion primario" onclick="confirmarEntrega()">✅ Confirmar entrega</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal comprobante -->
+<div class="modal-fondo" id="modal-comprobante">
+  <div class="modal">
+    <h3>Comprobante <span id="comp-codigo"></span></h3>
+    <p class="hint" id="comp-datos"></p>
+    <table style="margin-top:.6rem;">
+      <thead><tr><th>Medicamento</th><th>Cantidad</th></tr></thead>
+      <tbody id="comp-detalle"></tbody>
+    </table>
+    <div class="fila-acciones"><button class="accion primario" onclick="cerrarModal('modal-comprobante')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Modal nuevo turno -->
+<div class="modal-fondo" id="modal-nuevo">
+  <div class="modal">
+    <h3>Asignar turno</h3>
+    <div class="form-grid">
+      <div class="campo"><label>Tipo de documento</label>
+        <select id="nuevo-tipo"><option>CC</option><option>CE</option><option>NIT</option><option>PASAPORTE</option><option>TI</option></select>
+      </div>
+      <div class="campo"><label>Número de documento</label><input id="nuevo-doc"></div>
+      <div class="campo"><label>Nombre (opcional)</label><input id="nuevo-nombre"></div>
+      <div class="campo"><label>Teléfono (opcional)</label><input id="nuevo-tel"></div>
+    </div>
+    <div class="fila-acciones">
+      <button class="accion" onclick="cerrarModal('modal-nuevo')">Cancelar</button>
+      <button class="accion primario" onclick="crearTurnoManual()">Crear turno</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(3, '0');
+const sinTildes = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+let token = localStorage.getItem('asistente_token') || '';
+let modulo = Number(localStorage.getItem('asistente_modulo')) || 1;
+let nombreAsistente = localStorage.getItem('asistente_nombre') || 'asistente';
+let numModulos = 3;
+let medicamentos = [];
+let turnosCache = [];
+
+async function api(ruta, opts = {}) {
+  const r = await fetch(ruta, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', 'X-TOKEN': token, ...(opts.headers || {}) },
+  });
+  const data = await r.json().catch(() => ({}));
+  if (r.status === 401) { salir(); throw new Error('acceso revocado'); }
+  if (!r.ok) { alert(data.error || `Error ${r.status}`); throw new Error(data.error || r.status); }
+  return data;
+}
+
+// ---- Login ----
+async function cargarModulos() {
+  try {
+    const d = await (await fetch('/api/display')).json();
+    numModulos = d.num_modulos || 3;
+    $('login-modulo').innerHTML = Array.from({ length: numModulos }, (_, i) =>
+      `<option value="${i + 1}" ${i + 1 === modulo ? 'selected' : ''}>Módulo ${i + 1}</option>`).join('');
+  } catch (e) {}
+}
+
+async function ingresar() {
+  const pin = $('login-pin').value.trim();
+  const nombre = $('login-nombre').value.trim() || 'asistente';
+  if (!pin) { $('login-msg').textContent = 'Ingresa el PIN de despachador.'; return; }
+  try {
+    const r = await fetch('/api/emparejar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rol: 'despachador', pin, nombre: `Asistente PC: ${nombre}` }),
+    });
+    const d = await r.json();
+    if (!r.ok) { $('login-msg').textContent = d.error || 'PIN incorrecto'; return; }
+    token = d.token;
+    modulo = Number($('login-modulo').value) || 1;
+    nombreAsistente = nombre;
+    localStorage.setItem('asistente_token', token);
+    localStorage.setItem('asistente_modulo', String(modulo));
+    localStorage.setItem('asistente_nombre', nombreAsistente);
+    entrar();
+  } catch (e) {
+    $('login-msg').textContent = 'Sin conexión con el servidor.';
+  }
+}
+
+function entrar() {
+  $('login').style.display = 'none';
+  $('app').style.display = 'block';
+  $('mi-modulo').textContent = modulo;
+  $('conexion').textContent = `Módulo ${modulo} · ${nombreAsistente}`;
+  cargarMedicamentos(); cargarTurnos(); conectarWS();
+}
+
+function salir() {
+  localStorage.removeItem('asistente_token');
+  token = '';
+  location.reload();
+}
+
+function cambiarModulo() {
+  const m = prompt(`¿En qué módulo vas a atender? (1-${numModulos})`, modulo);
+  const n = Number(m);
+  if (n >= 1 && n <= numModulos) {
+    modulo = n;
+    localStorage.setItem('asistente_modulo', String(n));
+    $('mi-modulo').textContent = n;
+    $('conexion').textContent = `Módulo ${n} · ${nombreAsistente}`;
+  }
+}
+
+// ---- Turnos ----
+function badgeFormula(t) {
+  if (!t.num_formulas) return '<span class="badge FINALIZADO">Sin fórmula</span>';
+  if (t.ocr_estado === 'PROCESADA') return '<span class="badge ok">📄 OCR listo</span>';
+  return '<span class="badge warn">📄 Adjunta</span>';
+}
+
+async function cargarTurnos() {
+  if (!token) return;
+  turnosCache = await api('/api/turnos');
+  $('cuerpo-turnos').innerHTML = turnosCache.length ? turnosCache.map(t => {
+    const acciones = [];
+    if (['ESPERANDO', 'CREADO', 'NO_PRESENTADO'].includes(t.estado))
+      acciones.push(`<button class="accion primario" onclick="llamar(${t.id})">📣 Llamar a mi módulo</button>`);
+    if (['LLAMANDO', 'DESPACHO'].includes(t.estado))
+      acciones.push(`<button class="accion" onclick="abrirDespacho(${t.id})">💊 Despachar</button>`);
+    if (t.estado === 'LLAMANDO')
+      acciones.push(`<button class="accion peligro" onclick="noPresentado(${t.id})">No presentado</button>`);
+    if (['ENTREGADO', 'FINALIZADO'].includes(t.estado) && t.entrega_codigo)
+      acciones.push(`<button class="accion" onclick="verComprobante(${t.id})">🧾</button>`);
+    return `<tr>
+      <td class="num"><b>${pad(t.numero)}</b></td>
+      <td>${t.tipo_documento} ${t.numero_documento}${t.paciente_nombre ? '<br><span class="hint">' + t.paciente_nombre + '</span>' : ''}</td>
+      <td>${badgeFormula(t)}</td>
+      <td><span class="badge ${t.estado}">${t.estado.replace('_', ' ')}</span></td>
+      <td class="num">${t.modulo_asignado ?? '—'}</td>
+      <td>${acciones.join('')}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6">No hay turnos hoy.</td></tr>';
+}
+
+async function llamar(id) {
+  await api(`/api/turnos/${id}/estado`, {
+    method: 'PUT',
+    body: JSON.stringify({ estado: 'LLAMANDO', modulo_asignado: modulo }),
+  });
+}
+
+async function noPresentado(id) {
+  if (!confirm('¿Marcar como NO PRESENTADO?')) return;
+  await api(`/api/turnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: 'NO_PRESENTADO' }) });
+}
+
+function abrirNuevoTurno() { $('modal-nuevo').classList.add('abierto'); }
+
+async function crearTurnoManual() {
+  await api('/api/turnos', {
+    method: 'POST',
+    body: JSON.stringify({
+      tipo_documento: $('nuevo-tipo').value,
+      numero_documento: $('nuevo-doc').value.trim(),
+      nombre: $('nuevo-nombre').value.trim() || null,
+      telefono: $('nuevo-tel').value.trim() || null,
+    }),
+  });
+  $('nuevo-doc').value = ''; $('nuevo-nombre').value = ''; $('nuevo-tel').value = '';
+  cerrarModal('modal-nuevo');
+}
+
+// ---- Despacho ----
+let despachoTurno = null;
+let despachoItems = [];
+
+async function abrirDespacho(id) {
+  despachoTurno = turnosCache.find(t => t.id === id) || await api(`/api/turnos/${id}`);
+  despachoItems = [];
+  if (despachoTurno.estado === 'LLAMANDO') {
+    await api(`/api/turnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: 'DESPACHO' }) });
+  }
+  $('desp-turno-num').textContent = pad(despachoTurno.numero);
+  $('desp-paciente').textContent =
+    `${despachoTurno.tipo_documento} ${despachoTurno.numero_documento}` +
+    (despachoTurno.paciente_nombre ? ` — ${despachoTurno.paciente_nombre}` : '');
+  $('desp-buscar').value = '';
+  $('desp-resultados').innerHTML = '';
+  await pintarFormulas(id);
+  pintarItemsDespacho();
+  $('modal-despacho').classList.add('abierto');
+}
+
+/** Las imágenes requieren el token: se cargan como blob con el header X-TOKEN. */
+async function imagenFormula(formulaId, pagina, imgEl) {
+  try {
+    const r = await fetch(`/api/formulas/${formulaId}/imagen?pagina=${pagina}`, { headers: { 'X-TOKEN': token } });
+    if (r.ok) imgEl.src = URL.createObjectURL(await r.blob());
+  } catch (e) {}
+}
+
+async function pintarFormulas(turnoId) {
+  const formulas = await api(`/api/formulas/${turnoId}`);
+  if (!formulas.length) {
+    $('desp-formulas').innerHTML = '<p class="hint">⚠ Sin fórmula adjunta: no se puede despachar. Pide al paciente adjuntarla desde su app, o registra la fórmula desde la app de despachador.</p>';
+    return;
+  }
+  $('desp-formulas').innerHTML = formulas.map(f => {
+    let ocr = '';
+    if (f.ocr_estado === 'PROCESADA' && f.ocr_json) {
+      const j = JSON.parse(f.ocr_json);
+      ocr = `<p class="hint">🤖 OCR: ${j.medicamentos.length} medicamentos detectados.</p>
+        <button class="accion" onclick="usarOcr(${f.id})">↩ Cargar medicamentos detectados</button>`;
+    } else {
+      ocr = `<button class="accion primario" onclick="ejecutarOcr(${f.id})">🤖 Leer fórmula con IA (OCR)</button>`;
+    }
+    const paginas = Array.from({ length: f.num_paginas || 1 }, (_, i) =>
+      `<img class="formula" id="img-f${f.id}-p${i + 1}" style="margin-top:.5rem;">`).join('');
+    return `<div style="margin-bottom:.8rem;">
+      <details ontoggle="if(this.open){${Array.from({ length: f.num_paginas || 1 }, (_, i) =>
+        `imagenFormula(${f.id},${i + 1},document.getElementById('img-f${f.id}-p${i + 1}'));`).join('')}}">
+        <summary style="cursor:pointer;">📄 Fórmula (${f.num_paginas > 1 ? f.num_paginas + ' páginas' : 'imagen'}) — ver</summary>
+        ${paginas}
+      </details>
+      ${ocr}
+    </div>`;
+  }).join('');
+}
+
+async function ejecutarOcr(formulaId) {
+  $('desp-formulas').innerHTML = '<p class="hint">🤖 Procesando fórmula con IA…</p>';
+  try {
+    const r = await api(`/api/formulas/${formulaId}/ocr`, { method: 'POST' });
+    cargarValidacion(r.validacion);
+  } catch (e) {}
+  await pintarFormulas(despachoTurno.id);
+}
+
+async function usarOcr(formulaId) {
+  const formulas = await api(`/api/formulas/${despachoTurno.id}`);
+  const f = formulas.find(x => x.id === formulaId);
+  if (!f || !f.ocr_json) return;
+  const validacion = await api('/api/validar', {
+    method: 'POST', body: JSON.stringify({ medicamentos: JSON.parse(f.ocr_json).medicamentos }),
+  });
+  cargarValidacion(validacion);
+}
+
+function cargarValidacion(validacion) {
+  despachoItems = validacion.map(v => ({
+    medicamento_id: v.medicamento_id,
+    etiqueta: v.medicamento,
+    stock: v.stock,
+    cantidad: v.solicitado.cantidad,
+    solicitado: `${v.solicitado.nombre} ${v.solicitado.concentracion}`.trim(),
+  }));
+  pintarItemsDespacho();
+}
+
+function pintarItemsDespacho() {
+  $('desp-items').innerHTML = despachoItems.length ? despachoItems.map((it, i) => `<tr>
+    <td>${it.solicitado || '—'}</td>
+    <td>${it.medicamento_id ? it.etiqueta : '<span class="badge err">❌ Sin coincidencia</span>'}</td>
+    <td class="num">${it.medicamento_id ? it.stock : '—'}</td>
+    <td style="width:90px;"><input type="number" min="1" value="${it.cantidad}"
+      onchange="despachoItems[${i}].cantidad = Number(this.value)"></td>
+    <td><button class="accion peligro" onclick="despachoItems.splice(${i},1);pintarItemsDespacho()">🗑</button></td>
+  </tr>`).join('') : '<tr><td colspan="5">Sin medicamentos aún. Usa el OCR o el buscador.</td></tr>';
+}
+
+function buscarMedDespacho() {
+  const q = sinTildes($('desp-buscar').value.trim());
+  const cont = $('desp-resultados');
+  if (q.length < 2) { cont.innerHTML = ''; return; }
+  const resultados = medicamentos.filter(m =>
+    sinTildes(m.nombre).includes(q) || sinTildes(m.principio_activo).includes(q) || sinTildes(m.codigo).includes(q)
+  ).slice(0, 8);
+  cont.innerHTML = resultados.map(m =>
+    `<button class="accion" style="text-align:left;" onclick='agregarDesdeBusqueda(${m.id})'>
+      ➕ <b>${m.nombre} ${m.concentracion}</b> (${m.presentacion}) · stock ${m.stock}
+    </button>`).join('') || '<span class="hint">Sin coincidencias.</span>';
+}
+
+function agregarDesdeBusqueda(id) {
+  const m = medicamentos.find(x => x.id === id);
+  if (!m) return;
+  despachoItems.push({
+    medicamento_id: m.id,
+    etiqueta: `${m.nombre} ${m.concentracion} (${m.presentacion})`,
+    stock: m.stock,
+    cantidad: 1,
+    solicitado: '(manual)',
+  });
+  $('desp-buscar').value = '';
+  $('desp-resultados').innerHTML = '';
+  pintarItemsDespacho();
+}
+
+async function confirmarEntrega() {
+  const items = despachoItems.filter(i => i.medicamento_id && i.cantidad > 0)
+    .map(i => ({ medicamento_id: i.medicamento_id, cantidad: i.cantidad }));
+  if (!items.length) return alert('No hay medicamentos válidos para entregar.');
+  if (!confirm(`¿Confirmar la entrega de ${items.length} medicamento(s) desde el módulo ${modulo}?`)) return;
+  const c = await api('/api/entregas', {
+    method: 'POST',
+    body: JSON.stringify({ turno_id: despachoTurno.id, items, usuario: `asistente:${nombreAsistente}`, modulo }),
+  });
+  cerrarModal('modal-despacho');
+  pintarComprobante(c);
+}
+
+function pintarComprobante(c) {
+  $('comp-codigo').textContent = c.id;
+  $('comp-datos').textContent =
+    `Turno ${pad(c.numero_turno)} · ${c.paciente.tipo_documento} ${c.paciente.numero_documento}` +
+    (c.modulo ? ` · módulo ${c.modulo}` : '') + ` · ${new Date(c.fecha).toLocaleString('es-CO')}`;
+  $('comp-detalle').innerHTML = c.medicamentos.map(m =>
+    `<tr><td>${m.nombre}</td><td class="num">${m.cantidad}</td></tr>`).join('');
+  $('modal-comprobante').classList.add('abierto');
+}
+
+async function verComprobante(turnoId) {
+  pintarComprobante(await api(`/api/entregas/${turnoId}`));
+}
+
+async function cargarMedicamentos() {
+  medicamentos = await api('/api/medicamentos');
+}
+
+function cerrarModal(id) { $(id).classList.remove('abierto'); cargarTurnos(); }
+
+function conectarWS() {
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'turnos_updated') cargarTurnos();
+    if (msg.type === 'inventario_updated') cargarMedicamentos();
+  };
+  ws.onclose = () => setTimeout(conectarWS, 3000);
+}
+
+// ---- Arranque: si ya hay token vigente, entrar directo ----
+cargarModulos();
+if (token) {
+  fetch('/api/ping', { headers: { 'X-TOKEN': token } }).then(r => r.json()).then(d => {
+    if (d.rol === 'despachador' || d.rol === 'admin') entrar();
+    else salir();
+  }).catch(() => { $('conexion').textContent = 'Sin conexión'; });
+}
+setInterval(() => { if (token && $('app').style.display !== 'none') cargarTurnos(); }, 20000);
+</script>
+</body>
+</html>

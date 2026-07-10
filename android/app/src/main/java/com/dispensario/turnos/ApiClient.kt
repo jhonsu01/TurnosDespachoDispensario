@@ -113,9 +113,11 @@ class ApiClient(private val host: String, private val puerto: Int, private val t
         } finally { conn.disconnect() }
     }
 
-    fun registrarEntrega(turnoId: Long, items: JSONArray): JSONObject =
-        JSONObject(enviar("/api/entregas", "POST",
-            JSONObject().put("turno_id", turnoId).put("items", items).put("usuario", "app-despachador")))
+    fun registrarEntrega(turnoId: Long, items: JSONArray, modulo: Int? = null): JSONObject {
+        val body = JSONObject().put("turno_id", turnoId).put("items", items).put("usuario", "app-despachador")
+        if (modulo != null && modulo > 0) body.put("modulo", modulo)
+        return JSONObject(enviar("/api/entregas", "POST", body))
+    }
 
     fun entrega(turnoId: Long): JSONObject? {
         val conn = abrir("/api/entregas/$turnoId", "GET")

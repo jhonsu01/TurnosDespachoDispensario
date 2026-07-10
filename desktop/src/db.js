@@ -111,6 +111,11 @@ const CONFIG_DEFAULTS = {
   dias_alerta_vencimiento: '60',
   openai_api_key: '',
   openai_modelo: 'gpt-4o-mini',
+  // Impresora térmica de tickets (Epson TM-T20IVL o compatible ESC/POS, RAW 9100)
+  impresora_ip: '',
+  impresora_puerto: '9100',
+  ticket_logo: '', // PNG en base64 (se imprime en monocromo)
+  ticket_opciones: '{"mostrar_logo":true,"mostrar_nombre":true,"mostrar_fecha":true,"mostrar_pin":true,"mostrar_qr":true,"mensaje_pie":"Conserva este ticket. Observa la pantalla: te llamaremos por tu número."}',
   secreto_firma: '', // se genera al iniciar
 };
 
@@ -161,6 +166,11 @@ class Db {
       )`);
       this.run(`INSERT INTO dispositivos SELECT * FROM dispositivos_old`);
       this.run('DROP TABLE dispositivos_old');
+    }
+    // v0.3.0: la entrega registra desde qué módulo se despachó
+    const colsEnt = this.query('PRAGMA table_info(entregas)').map(c => c.name);
+    if (!colsEnt.includes('modulo')) {
+      this.run('ALTER TABLE entregas ADD COLUMN modulo INTEGER');
     }
   }
 
@@ -516,7 +526,7 @@ class Db {
    * y genera un comprobante JSON firmado con HMAC-SHA256.
    * items: [{ medicamento_id, cantidad }]
    */
-  registrarEntrega(turno_id, items, usuario = 'panel') {
+  registrarEntrega(turno_id, items, usuario = 'panel', modulo = null) {
     const turno = this.turnoCompleto(turno_id);
     if (!turno) throw new Error('Turno no encontrado');
     if (this.query('SELECT 1 FROM entregas WHERE turno_id = ?', [turno_id]).length) {
@@ -556,11 +566,14 @@ class Db {
 
     const seq = this.query('SELECT COUNT(*) AS c FROM entregas')[0].c + 1;
     const codigo = `ENT-${String(seq).padStart(5, '0')}`;
+    // Módulo desde el que se entrega: el indicado, o el módulo al que se llamó el turno
+    const moduloEntrega = Number(modulo) > 0 ? Number(modulo) : (turno.modulo_asignado || null);
     const comprobante = {
       id: codigo,
       turno_id,
       numero_turno: turno.numero,
       fecha_turno: turno.fecha,
+      modulo: moduloEntrega,
       paciente: {
         tipo_documento: turno.tipo_documento,
         numero_documento: turno.numero_documento,
@@ -573,10 +586,11 @@ class Db {
     const json = JSON.stringify(comprobante);
     const firma = crypto.createHmac('sha256', this.getConfig('secreto_firma') || 'dispensario')
       .update(json).digest('hex');
-    this.run('INSERT INTO entregas (turno_id, codigo, json, firma, usuario, fecha) VALUES (?, ?, ?, ?, ?, ?)',
-      [turno_id, codigo, json, firma, usuario, comprobante.fecha]);
+    this.run('INSERT INTO entregas (turno_id, codigo, json, firma, usuario, fecha, modulo) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [turno_id, codigo, json, firma, usuario, comprobante.fecha, moduloEntrega]);
     this.setEstadoTurno(turno_id, 'ENTREGADO');
-    this.auditar(usuario, 'ENTREGA', `${codigo} turno ${turno.numero} (${detalle.length} medicamentos)`);
+    this.auditar(usuario, 'ENTREGA',
+      `${codigo} turno ${turno.numero} (${detalle.length} medicamentos${moduloEntrega ? `, módulo ${moduloEntrega}` : ''})`);
     return { ...comprobante, firma };
   }
 
@@ -588,7 +602,7 @@ class Db {
 
   getEntregas(limite = 100) {
     return this.query(
-      `SELECT e.turno_id, e.codigo, e.usuario, e.fecha, e.json, t.numero,
+      `SELECT e.turno_id, e.codigo, e.usuario, e.fecha, e.json, e.modulo, t.numero,
               p.tipo_documento, p.numero_documento, p.nombre AS paciente_nombre
        FROM entregas e
        JOIN turnos t ON t.id = e.turno_id
@@ -601,6 +615,7 @@ class Db {
       paciente: { tipo_documento: r.tipo_documento, numero_documento: r.numero_documento, nombre: r.paciente_nombre },
       num_items: JSON.parse(r.json).medicamentos.length,
       usuario: r.usuario,
+      modulo: r.modulo,
       fecha: r.fecha,
     }));
   }

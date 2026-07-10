@@ -61,8 +61,22 @@
     <div class="num-turno" id="turno-num">000</div>
     <div id="qr"></div>
     <p class="pin">PIN: <b id="turno-pin"></b></p>
+    <button class="solicitar" id="btn-imprimir" style="display:none;background:var(--amarillo);color:#3B2F04;"
+      onclick="imprimirTicket(event)">🖨 Imprimir mi ticket</button>
     <p class="aviso">📱 Escanea el QR con la app para seguir tu turno y adjuntar tu fórmula.<br>
       Observa la pantalla: te llamaremos por este número.</p>
+  </div>
+
+  <!-- ⚙ Configuración de impresora (esquina inferior derecha) -->
+  <button id="btn-config" onclick="abrirConfigImpresora()"
+    style="position:fixed;bottom:10px;right:10px;background:none;border:none;color:#334155;font-size:1.5rem;cursor:pointer;">⚙</button>
+  <div class="panel" id="config-impresora" style="display:none;position:fixed;inset:0;margin:auto;height:fit-content;z-index:10;">
+    <h1 style="font-size:1.3rem;">🖨 Impresora de tickets</h1>
+    <p class="sub" id="imp-estado">…</p>
+    <button class="solicitar" style="font-size:1.1rem;" onclick="buscarImpresorasKiosko(this)">🔍 Buscar impresoras en la red</button>
+    <div id="imp-lista" style="display:flex;flex-direction:column;gap:.5rem;margin-top:.8rem;"></div>
+    <button class="solicitar" style="font-size:1rem;background:#1E293B;color:var(--texto);margin-top:.8rem;"
+      onclick="document.getElementById('config-impresora').style.display='none'">Cerrar</button>
   </div>
 
 <script src="/qrcode.min.js"></script>
@@ -70,10 +84,16 @@
 const $ = id => document.getElementById(id);
 let documento = '';
 let timerVolver = null;
+let turnoActual = null;
+let ticketDisponible = false;
 
-fetch('/api/display').then(r => r.json()).then(d => {
-  if (d.nombre_centro) $('nombre').textContent = d.nombre_centro;
-}).catch(() => {});
+function cargarDisplay() {
+  fetch('/api/display').then(r => r.json()).then(d => {
+    if (d.nombre_centro) $('nombre').textContent = d.nombre_centro;
+    ticketDisponible = !!d.ticket_disponible;
+  }).catch(() => {});
+}
+cargarDisplay();
 
 function pintarDoc() { $('doc').textContent = documento || ' '; }
 function tecla(d) { if (documento.length < 15) { documento += d; pintarDoc(); } }
@@ -90,14 +110,17 @@ async function solicitar() {
     });
     const t = await r.json();
     if (!r.ok) { alert(t.error || 'No se pudo crear el turno'); return; }
+    turnoActual = t;
     $('turno-num').textContent = String(t.numero).padStart(3, '0');
     $('turno-pin').textContent = t.codigo_pin;
     $('qr').innerHTML = '';
     try { new QRCode($('qr'), { text: t.qr_code, width: 180, height: 180 }); } catch (e) {}
+    $('btn-imprimir').style.display = ticketDisponible ? 'block' : 'none';
+    $('btn-imprimir').textContent = '🖨 Imprimir mi ticket';
     $('formulario').style.display = 'none';
     $('resultado').style.display = 'block';
     clearTimeout(timerVolver);
-    timerVolver = setTimeout(volver, 20000);
+    timerVolver = setTimeout(volver, 30000);
   } catch (e) {
     alert('Sin conexión con el servidor. Intenta de nuevo.');
   }
@@ -110,9 +133,66 @@ function volver() {
   $('formulario').style.display = 'block';
 }
 document.body.addEventListener('click', (e) => {
-  // Cualquier toque en la pantalla de resultado vuelve al formulario
-  if ($('resultado').style.display === 'block' && !$('resultado').contains(e.target)) volver();
+  // Cualquier toque fuera de los paneles vuelve al formulario
+  if ($('config-impresora').style.display === 'block') return;
+  if ($('resultado').style.display === 'block' && !$('resultado').contains(e.target)
+      && e.target.id !== 'btn-config') volver();
 });
+
+// ---- Impresión del ticket (impresora térmica por red) ----
+async function imprimirTicket(e) {
+  e.stopPropagation();
+  if (!turnoActual) return;
+  clearTimeout(timerVolver);
+  timerVolver = setTimeout(volver, 30000);
+  $('btn-imprimir').textContent = '🖨 Imprimiendo…';
+  try {
+    const r = await fetch(`/api/tickets/${turnoActual.id}`, { method: 'POST' });
+    const d = await r.json();
+    $('btn-imprimir').textContent = r.ok ? '✅ Ticket impreso — toma tu papel' : ('⚠ ' + (d.error || 'Error'));
+  } catch (err) {
+    $('btn-imprimir').textContent = '⚠ Sin conexión con el servidor';
+  }
+}
+
+// ---- Selección de impresora en red (queda enlazada en el servidor) ----
+async function abrirConfigImpresora() {
+  $('config-impresora').style.display = 'block';
+  try {
+    const imp = await (await fetch('/api/impresora')).json();
+    $('imp-estado').textContent = imp.ip
+      ? `Impresora enlazada: ${imp.ip}:${imp.puerto}`
+      : 'No hay impresora enlazada todavía.';
+  } catch (e) { $('imp-estado').textContent = 'Sin conexión con el servidor.'; }
+  $('imp-lista').innerHTML = '';
+}
+
+async function buscarImpresorasKiosko(boton) {
+  boton.disabled = true;
+  boton.textContent = '🔍 Buscando… (unos segundos)';
+  try {
+    const r = await (await fetch('/api/impresoras/buscar', { method: 'POST' })).json();
+    $('imp-lista').innerHTML = (r.impresoras && r.impresoras.length)
+      ? r.impresoras.map(ip =>
+          `<button class="solicitar" style="font-size:1.1rem;" onclick="enlazarImpresora('${ip}')">🖨 ${ip} — usar esta</button>`).join('')
+      : '<p class="sub">No se encontraron impresoras en la red (puerto 9100).</p>';
+  } catch (e) {
+    $('imp-lista').innerHTML = '<p class="sub">Error buscando impresoras.</p>';
+  }
+  boton.disabled = false;
+  boton.textContent = '🔍 Buscar impresoras en la red';
+}
+
+async function enlazarImpresora(ip) {
+  await fetch('/api/impresora', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ip, puerto: 9100 }),
+  });
+  $('imp-estado').textContent = `Impresora enlazada: ${ip}:9100 ✓`;
+  $('imp-lista').innerHTML = '';
+  cargarDisplay();
+}
 </script>
 </body>
 </html>

@@ -4,11 +4,12 @@ Sistema inteligente de dispensario de medicamentos con turnero, **OCR de fórmul
 
 | Componente | Tecnología | Entregable |
 | --- | --- | --- |
-| 🖥️ Escritorio (servidor + panel admin) | Electron + Express + WebSocket + SQLite | Instalador **MSI** |
+| 🖥️ Escritorio (servidor + panel admin) | Electron + Express + WebSocket + SQLite | Instalador **MSI** (`TurnosDispensario-vX.msi`) |
+| 🖥️ Asistente (solo turnos y despacho, para los módulos) | Electron (cliente de red) | Instalador **MSI** (`TurnosDispensario-Asistente-vX.msi`) |
 | 📱 App móvil del personal (despachador / inventario / kiosko) | Android (Kotlin) | **APK** (`TurnosDispensario-vX.apk`) |
 | 📱 App del paciente (solo rol paciente) | Android (Kotlin, mismo código) | **APK** (`TurnosDispensario-Paciente-vX.apk`) |
 | 📺 Pantallas informativas | Web en modo oscuro (`/display.html`) con marquesina configurable | Servida por el escritorio |
-| 🎫 Kiosko de autoservicio | Web táctil (`/kiosko.html`) con QR del turno | Servida por el escritorio |
+| 🎫 Kiosko de autoservicio | Web táctil (`/kiosko.html`) con QR + **ticket térmico ESC/POS** (Epson TM-T20IVL, corte automático) | Servida por el escritorio |
 
 Los instaladores se publican automáticamente en la sección **[Releases](../../releases)** de este repositorio (solo se conserva la última versión; los binarios se nombran con el tag).
 

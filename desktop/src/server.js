@@ -14,6 +14,7 @@ const express = require('express');
 const { WebSocketServer } = require('ws');
 const { Db } = require('./db');
 const { procesarFormula } = require('./ocr');
+const { construirTicket, enviarAImpresora, buscarImpresoras } = require('./ticket');
 
 const PUERTO_DISCOVERY = 18400;
 
@@ -121,13 +122,66 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
     });
   });
 
-  // Configuración pública de las pantallas (marquesina)
+  // Configuración pública de las pantallas (marquesina, módulos, ticket)
   app.get('/api/display', (_req, res) => {
     res.json({
       nombre_centro: db.getConfig('nombre_centro'),
       marquesina_velocidad: Number(db.getConfig('marquesina_velocidad')) || 45,
       marquesina_mensaje: db.getConfig('marquesina_mensaje') || '',
+      num_modulos: Number(db.getConfig('num_modulos')) || 3,
+      ticket_disponible: !!db.getConfig('impresora_ip'),
     });
+  });
+
+  // ---- Ticket térmico (Epson TM-T20IVL / ESC-POS por red, RAW 9100) ----
+  // Imprime el ticket del turno. Lo usa el kiosko de autoservicio (sin token:
+  // solo funciona dentro de la red local y queda auditado).
+  app.post('/api/tickets/:turno_id', async (req, res) => {
+    const t = db.turnoCompleto(Number(req.params.turno_id));
+    if (!t) return res.status(404).json({ error: 'Turno no encontrado' });
+    const ip = db.getConfig('impresora_ip');
+    if (!ip) return res.status(400).json({ error: 'No hay impresora configurada. Búscala desde el kiosko (⚙) o en el panel.' });
+    let opciones = {};
+    try { opciones = JSON.parse(db.getConfig('ticket_opciones') || '{}'); } catch (e) {}
+    try {
+      const datos = construirTicket({
+        turno: t,
+        nombreCentro: db.getConfig('nombre_centro'),
+        opciones,
+        logoBase64: db.getConfig('ticket_logo') || '',
+      });
+      await enviarAImpresora({ ip, puerto: Number(db.getConfig('impresora_puerto')) || 9100, datos });
+      db.auditar('kiosko', 'TICKET_IMPRESO', `turno ${t.numero} en ${ip}`);
+      res.json({ ok: true });
+    } catch (e) {
+      res.status(502).json({ error: e.message });
+    }
+  });
+
+  // Busca impresoras RAW 9100 en la subred local (tarda unos segundos)
+  app.post('/api/impresoras/buscar', async (_req, res) => {
+    try {
+      res.json({ impresoras: await buscarImpresoras() });
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
+  // Consulta y selección de la impresora enlazada (kiosko o panel)
+  app.get('/api/impresora', (_req, res) => {
+    res.json({
+      ip: db.getConfig('impresora_ip') || '',
+      puerto: Number(db.getConfig('impresora_puerto')) || 9100,
+    });
+  });
+
+  app.put('/api/impresora', (req, res) => {
+    const { ip, puerto } = req.body || {};
+    if (ip !== undefined) db.setConfig('impresora_ip', String(ip).trim());
+    if (Number(puerto) > 0) db.setConfig('impresora_puerto', Number(puerto));
+    db.auditar(actorDe(req), 'IMPRESORA_CONFIG', `${ip}:${puerto || 9100}`);
+    broadcast('config_updated');
+    res.json({ ip: db.getConfig('impresora_ip'), puerto: Number(db.getConfig('impresora_puerto')) || 9100 });
   });
 
   // ---- Medicamentos ----
@@ -330,13 +384,13 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
 
   // ---- Entregas ----
   app.post('/api/entregas', conToken('despachador'), (req, res) => {
-    const { turno_id, items, usuario } = req.body || {};
+    const { turno_id, items, usuario, modulo } = req.body || {};
     const normal = (Array.isArray(items) ? items : []).map(i => ({
       medicamento_id: Number(i.medicamento_id),
       cantidad: Number(i.cantidad) > 0 ? Math.round(Number(i.cantidad)) : 0,
     })).filter(i => i.medicamento_id && i.cantidad > 0);
     try {
-      const comprobante = db.registrarEntrega(Number(turno_id), normal, usuario || actorDe(req));
+      const comprobante = db.registrarEntrega(Number(turno_id), normal, usuario || actorDe(req), modulo);
       broadcast('turnos_updated');
       broadcast('inventario_updated');
       res.status(201).json(comprobante);
@@ -389,7 +443,8 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
 
   app.put('/api/config', soloAdmin, (req, res) => {
     const permitidas = ['timeout_minutos', 'num_modulos', 'nombre_centro', 'marquesina_velocidad',
-      'marquesina_mensaje', 'dias_alerta_vencimiento', 'openai_modelo'];
+      'marquesina_mensaje', 'dias_alerta_vencimiento', 'openai_modelo',
+      'impresora_ip', 'impresora_puerto', 'ticket_opciones', 'ticket_logo'];
     for (const k of permitidas) {
       if (req.body[k] !== undefined) db.setConfig(k, req.body[k]);
     }

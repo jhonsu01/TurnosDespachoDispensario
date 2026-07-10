@@ -193,7 +193,7 @@
       <div class="hint">Cada entrega genera un comprobante JSON firmado con HMAC-SHA256, descargable desde aquí.</div>
     </div>
     <table>
-      <thead><tr><th>Código</th><th>Turno</th><th>Paciente</th><th>Ítems</th><th>Entregado por</th><th>Fecha</th><th></th></tr></thead>
+      <thead><tr><th>Código</th><th>Turno</th><th>Paciente</th><th>Ítems</th><th>Entregado por</th><th>Módulo</th><th>Fecha</th><th></th></tr></thead>
       <tbody id="cuerpo-entregas"></tbody>
     </table>
   </div>
@@ -241,6 +241,36 @@
           <input id="cfg-marquesina-msg" placeholder="Ej: ☎ 300 123 4567 — Horario de atención lunes a viernes 7am-4pm"></div>
       </div>
       <div class="fila-acciones"><button class="accion primario" onclick="guardarConfig()">Guardar configuración</button></div>
+    </div>
+    <div class="card">
+      <b>🖨 Ticket del kiosko (impresora térmica ESC/POS)</b>
+      <div class="hint">Para la Epson TM-T20IVL o compatibles: papel 80&nbsp;mm, impresión por red (RAW 9100),
+        corte automático. El kiosko de autoservicio imprime el turno para quien no tenga la app.</div>
+      <div class="form-grid" style="margin-top:.8rem;">
+        <div class="campo"><label>IP de la impresora</label>
+          <div style="display:flex;gap:.4rem;">
+            <input id="cfg-imp-ip" placeholder="192.168.1.50" style="flex:1;">
+            <button class="accion" onclick="buscarImpresoras(this)" title="Buscar impresoras en la red">🔍</button>
+          </div>
+        </div>
+        <div class="campo"><label>Puerto</label><input id="cfg-imp-puerto" type="number" value="9100"></div>
+        <div class="campo"><label>Logo del ticket (PNG, se imprime en B/N)</label>
+          <input id="cfg-ticket-logo" type="file" accept="image/png"></div>
+      </div>
+      <div id="cfg-imp-resultados" class="hint"></div>
+      <div style="display:flex;gap:1.2rem;flex-wrap:wrap;margin-top:.8rem;" id="cfg-ticket-checks">
+        <label><input type="checkbox" id="tk-logo" style="width:auto;"> Logo</label>
+        <label><input type="checkbox" id="tk-nombre" style="width:auto;"> Nombre del dispensario</label>
+        <label><input type="checkbox" id="tk-fecha" style="width:auto;"> Fecha y hora</label>
+        <label><input type="checkbox" id="tk-pin" style="width:auto;"> PIN del turno</label>
+        <label><input type="checkbox" id="tk-qr" style="width:auto;"> Código QR</label>
+      </div>
+      <div class="campo" style="margin-top:.8rem;"><label>Mensaje al pie del ticket</label>
+        <input id="tk-pie" placeholder="Conserva este ticket…"></div>
+      <div class="fila-acciones">
+        <button class="accion" onclick="probarTicket()">🖨 Imprimir prueba</button>
+        <button class="accion primario" onclick="guardarConfig()">Guardar configuración</button>
+      </div>
     </div>
     <div class="card">
       <b>🔐 PINs de emparejamiento de esta sesión</b>
@@ -742,9 +772,10 @@ async function cargarEntregas() {
     <td>${e.paciente.tipo_documento} ${e.paciente.numero_documento}${e.paciente.nombre ? ' — ' + e.paciente.nombre : ''}</td>
     <td class="num">${e.num_items}</td>
     <td>${e.usuario || '—'}</td>
+    <td class="num">${e.modulo ? 'Módulo ' + e.modulo : '—'}</td>
     <td class="num">${fechaHora(e.fecha)}</td>
     <td><button class="accion" onclick="verComprobante(${e.turno_id})">🧾 Ver</button></td>
-  </tr>`).join('') : '<tr><td colspan="7">Aún no hay entregas registradas.</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="8">Aún no hay entregas registradas.</td></tr>';
 }
 
 // ---- Medicamentos ----
@@ -853,14 +884,14 @@ async function cargarAuditoria() {
 // ---- Config ----
 function pintarPines() {
   const p = config.pines_sesion || {};
-  const nombres = { despachador: '💊 Despachador', admin: '🛡 Administrador', kiosko: '📺 Kiosko (TV / turnos)' };
+  const nombres = { despachador: '💊 Despachador', inventario: '🗃 Inventario (almacenista)', admin: '🛡 Administrador', kiosko: '📺 Kiosko (TV / turnos)' };
   $('cuerpo-pines').innerHTML = Object.keys(nombres).map(rol => `<tr>
     <td>${nombres[rol]}</td>
     <td><b style="font-size:1.2rem;letter-spacing:.15em;">${p[rol] || '—'}</b></td>
   </tr>`).join('');
   $('conexion').innerHTML =
     `Servidor: <b>http://${config.ip}:${config.puerto}</b> &nbsp;|&nbsp; ` +
-    `PIN — despachador: <b>${p.despachador}</b> · admin: <b>${p.admin}</b> · kiosko: <b>${p.kiosko}</b>`;
+    `PIN — despachador: <b>${p.despachador}</b> · inventario: <b>${p.inventario}</b> · admin: <b>${p.admin}</b> · kiosko: <b>${p.kiosko}</b>`;
 }
 
 async function cargarConfig() {
@@ -873,6 +904,17 @@ async function cargarConfig() {
   $('cfg-openai-modelo').value = config.openai_modelo || 'gpt-4o-mini';
   $('cfg-marquesina-vel').value = config.marquesina_velocidad || 45;
   $('cfg-marquesina-msg').value = config.marquesina_mensaje || '';
+  // Impresora y personalización del ticket
+  $('cfg-imp-ip').value = config.impresora_ip || '';
+  $('cfg-imp-puerto').value = config.impresora_puerto || 9100;
+  let tk = {};
+  try { tk = JSON.parse(config.ticket_opciones || '{}'); } catch (e) {}
+  $('tk-logo').checked = tk.mostrar_logo !== false;
+  $('tk-nombre').checked = tk.mostrar_nombre !== false;
+  $('tk-fecha').checked = tk.mostrar_fecha !== false;
+  $('tk-pin').checked = tk.mostrar_pin !== false;
+  $('tk-qr').checked = tk.mostrar_qr !== false;
+  $('tk-pie').value = tk.mensaje_pie || '';
   pintarPines();
   $('instrucciones-app').innerHTML =
     `La app Android <b>detecta este servidor automáticamente</b> (misma red WiFi o hotspot de este equipo). ` +
@@ -884,22 +926,77 @@ async function cargarConfig() {
   await cargarDispositivos();
 }
 
-async function guardarConfig() {
-  await api('/api/config', {
-    method: 'PUT',
-    body: JSON.stringify({
-      nombre_centro: $('cfg-nombre').value.trim(),
-      timeout_minutos: Number($('cfg-timeout').value) || 5,
-      num_modulos: Number($('cfg-modulos').value) || 3,
-      dias_alerta_vencimiento: Number($('cfg-dias-venc').value) || 60,
-      openai_api_key: $('cfg-openai-key').value.trim(),
-      openai_modelo: $('cfg-openai-modelo').value.trim() || 'gpt-4o-mini',
-      marquesina_velocidad: Number($('cfg-marquesina-vel').value) || 45,
-      marquesina_mensaje: $('cfg-marquesina-msg').value.trim(),
-    }),
+/** Lee el PNG del logo como base64 (sin el prefijo data:). */
+function leerLogo() {
+  return new Promise((resolve) => {
+    const archivo = $('cfg-ticket-logo').files[0];
+    if (!archivo) return resolve(undefined); // sin cambios
+    const lector = new FileReader();
+    lector.onload = () => resolve(String(lector.result).replace(/^data:image\/\w+;base64,/, ''));
+    lector.onerror = () => resolve(undefined);
+    lector.readAsDataURL(archivo);
   });
+}
+
+async function guardarConfig() {
+  const logo = await leerLogo();
+  const body = {
+    nombre_centro: $('cfg-nombre').value.trim(),
+    timeout_minutos: Number($('cfg-timeout').value) || 5,
+    num_modulos: Number($('cfg-modulos').value) || 3,
+    dias_alerta_vencimiento: Number($('cfg-dias-venc').value) || 60,
+    openai_api_key: $('cfg-openai-key').value.trim(),
+    openai_modelo: $('cfg-openai-modelo').value.trim() || 'gpt-4o-mini',
+    marquesina_velocidad: Number($('cfg-marquesina-vel').value) || 45,
+    marquesina_mensaje: $('cfg-marquesina-msg').value.trim(),
+    impresora_ip: $('cfg-imp-ip').value.trim(),
+    impresora_puerto: Number($('cfg-imp-puerto').value) || 9100,
+    ticket_opciones: JSON.stringify({
+      mostrar_logo: $('tk-logo').checked,
+      mostrar_nombre: $('tk-nombre').checked,
+      mostrar_fecha: $('tk-fecha').checked,
+      mostrar_pin: $('tk-pin').checked,
+      mostrar_qr: $('tk-qr').checked,
+      mensaje_pie: $('tk-pie').value.trim(),
+    }),
+  };
+  if (logo !== undefined) body.ticket_logo = logo;
+  await api('/api/config', { method: 'PUT', body: JSON.stringify(body) });
   await cargarConfig();
   alert('Configuración guardada.');
+}
+
+async function buscarImpresoras(boton) {
+  boton.disabled = true;
+  $('cfg-imp-resultados').textContent = '🔍 Buscando impresoras en la red (puerto 9100)… tarda unos segundos.';
+  try {
+    const r = await api('/api/impresoras/buscar', { method: 'POST' });
+    $('cfg-imp-resultados').innerHTML = r.impresoras.length
+      ? 'Encontradas: ' + r.impresoras.map(ip =>
+          `<button class="accion" onclick="$('cfg-imp-ip').value='${ip}'">${ip}</button>`).join(' ')
+      : 'No se encontraron impresoras RAW 9100 en la subred. Verifica que esté encendida y conectada a la misma red.';
+  } catch (e) {
+    $('cfg-imp-resultados').textContent = 'Error buscando impresoras.';
+  }
+  boton.disabled = false;
+}
+
+async function probarTicket() {
+  // Guarda primero la configuración y luego imprime el último turno del día (o uno de prueba)
+  await guardarConfig();
+  const turnos = await api('/api/turnos');
+  let turnoId = turnos.length ? turnos[turnos.length - 1].id : null;
+  if (!turnoId) {
+    const t = await api('/api/turnos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo_documento: 'CC', numero_documento: '999999999', nombre: 'PRUEBA TICKET' }),
+    });
+    turnoId = t.id;
+  }
+  try {
+    await api(`/api/tickets/${turnoId}`, { method: 'POST' });
+    alert('Ticket de prueba enviado a la impresora ✓');
+  } catch (e) { /* el alert de error ya se mostró */ }
 }
 
 async function regenerarPines() {
@@ -911,7 +1008,7 @@ async function regenerarPines() {
 
 async function cargarDispositivos() {
   const dispositivos = await api('/api/dispositivos');
-  const roles = { despachador: '💊 Despachador', admin: '🛡 Admin', kiosko: '📺 Kiosko' };
+  const roles = { despachador: '💊 Despachador', inventario: '🗃 Inventario', admin: '🛡 Admin', kiosko: '📺 Kiosko' };
   $('cuerpo-dispositivos').innerHTML = dispositivos.length ? dispositivos.map(d => `<tr>
     <td>${d.nombre || 'dispositivo'}</td>
     <td>${roles[d.rol] || d.rol}</td>

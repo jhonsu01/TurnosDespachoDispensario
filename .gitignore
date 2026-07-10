@@ -1,6 +1,7 @@
 # Node / Electron
 node_modules/
 desktop/dist/
+asistente/dist/
 npm-debug.log*
 
 # Android

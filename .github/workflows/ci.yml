@@ -36,6 +36,9 @@ jobs:
           node --check src/server.js
           node --check src/db.js
           node --check src/ocr.js
+          node --check src/ticket.js
+          node --check ../asistente/src/main.js
+          node --check ../asistente/src/preload.js
 
       - name: Smoke test de API
         working-directory: desktop

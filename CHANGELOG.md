@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.3.0 — 2026-07-09
+
+### Nueva app: Dispensario Asistente (MSI)
+- Cliente de escritorio para los módulos de atención en Windows: **solo turnos y despacho**
+  (asignar turno, llamar, OCR, buscador, entregar). Sin acceso a administración.
+- Autodescubrimiento del servidor por UDP + conexión manual de respaldo.
+- Ingreso con **PIN de despachador + selección de módulo**; el módulo queda en cada entrega.
+
+### Ticket térmico en el kiosko de autoservicio
+- Impresión ESC/POS por red (RAW 9100) para **Epson TM-T20IVL** y compatibles:
+  80 mm, 576 puntos, número de turno gigante, QR nativo y **corte automático**.
+- Botón "🖨 Imprimir mi ticket" para quien no tenga la app.
+- **Búsqueda de impresoras en la red** desde el kiosko (⚙) y desde el panel; la selección
+  queda enlazada en el servidor.
+- **Personalización del ticket en el panel**: logo PNG (impreso en B/N), nombre, fecha,
+  PIN, QR y mensaje de pie configurables + impresión de prueba.
+
+### Panel y servidor
+- PIN de sesión del rol **Inventario** ahora visible en Configuración (faltaba).
+- Historial de entregas con columna **Módulo** (app de despachador, asistente o panel).
+- Despachador en Android: al entrar **elige su módulo**; queda predeterminado al llamar
+  y se registra en el comprobante de entrega.
+
 ## v0.2.0 — 2026-07-09
 
 ### Android

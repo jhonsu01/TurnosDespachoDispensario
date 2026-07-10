@@ -106,20 +106,32 @@ async function main() {
     assert.strictEqual(llamado.data.modulo_asignado, 2);
     console.log('✓ llamado a módulo');
 
-    // 8. Entrega: descuenta inventario FEFO y firma comprobante
+    // 8. Entrega: descuenta inventario FEFO, firma comprobante y registra el módulo
     const entrega = await api('/api/entregas', {
       method: 'POST',
       body: JSON.stringify({
         turno_id: turno.data.id,
         items: [{ medicamento_id: losartan.id, cantidad: 30 }],
         usuario: 'smoke-test',
+        modulo: 2,
       }),
     });
     assert.strictEqual(entrega.status, 201);
     assert.strictEqual(entrega.data.id, 'ENT-00001');
     assert.ok(/^[0-9a-f]{64}$/.test(entrega.data.firma), 'firma HMAC presente');
     assert.strictEqual(entrega.data.medicamentos[0].cantidad, 30);
-    console.log('✓ entrega con comprobante firmado');
+    assert.strictEqual(entrega.data.modulo, 2, 'módulo registrado en el comprobante');
+    const listaEnt = await api('/api/entregas');
+    assert.strictEqual(listaEnt.data[0].modulo, 2, 'módulo visible en el historial');
+    console.log('✓ entrega con comprobante firmado y módulo');
+
+    // 8b. Ticket sin impresora configurada: error claro (nunca cuelga)
+    const ticket = await api(`/api/tickets/${turno.data.id}`, { method: 'POST' });
+    assert.strictEqual(ticket.status, 400);
+    assert.ok(/impresora/i.test(ticket.data.error));
+    const imp = await api('/api/impresora');
+    assert.strictEqual(imp.data.ip, '');
+    console.log('✓ ticket sin impresora falla con mensaje claro');
 
     // 9. Stock descontado
     const meds2 = await api('/api/medicamentos');
