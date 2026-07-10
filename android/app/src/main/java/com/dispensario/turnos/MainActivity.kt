@@ -956,6 +956,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.txtValidacion).text = sb.toString()
     }
 
+    private var bitmapFormula: Bitmap? = null
+
     private fun cargarImagenFormula(formulaId: Long) {
         val host = prefs.getString("host", "") ?: return
         val puerto = prefs.getInt("puerto", 3000)
@@ -968,12 +970,40 @@ class MainActivity : AppCompatActivity() {
                 val bmp = BitmapFactory.decodeStream(conn.inputStream)
                 conn.disconnect()
                 ui.post {
+                    bitmapFormula = bmp
                     val img = findViewById<ImageView>(R.id.imgFormula)
                     img.setImageBitmap(bmp)
                     img.visibility = View.VISIBLE
+                    // Tocar la imagen la abre a pantalla completa con zoom de pellizco
+                    img.setOnClickListener { abrirZoomFormula() }
                 }
             } catch (e: Exception) { /* la imagen es opcional */ }
         }
+    }
+
+    /** Fórmula a pantalla completa: pellizca para ampliar, arrastra para moverte. */
+    private fun abrirZoomFormula() {
+        val bmp = bitmapFormula ?: return
+        val dialogo = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val zoom = ZoomImageView(this)
+        zoom.setImageBitmap(bmp)
+        zoom.setBackgroundColor(Color.BLACK)
+        val contenedor = android.widget.FrameLayout(this)
+        contenedor.addView(zoom, android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT))
+        val cerrar = Button(this)
+        cerrar.text = "✕ Cerrar"
+        cerrar.setOnClickListener { dialogo.dismiss() }
+        val lp = android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT)
+        lp.gravity = android.view.Gravity.TOP or android.view.Gravity.END
+        lp.setMargins(0, 24, 24, 0)
+        contenedor.addView(cerrar, lp)
+        dialogo.setContentView(contenedor)
+        dialogo.show()
+        toast("🔍 Pellizca para ampliar la fórmula")
     }
 
     private fun ejecutarOcr() {

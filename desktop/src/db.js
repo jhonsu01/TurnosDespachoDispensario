@@ -411,7 +411,11 @@ class Db {
        ORDER BY id DESC`, [paciente.id, hoy])[0];
     if (abierto) return this.turnoCompleto(abierto.id);
 
-    const nro = (this.query('SELECT COALESCE(MAX(numero),0) AS m FROM turnos WHERE fecha = ?', [hoy])[0].m) + 1;
+    // Numeración: reinicia en 001 cada día; si la jornada llega a 999, vuelve a 001.
+    // Se toma el número del ÚLTIMO turno creado (no el MAX) para que el reinicio funcione.
+    const ultimo = this.query(
+      'SELECT numero FROM turnos WHERE fecha = ? ORDER BY id DESC LIMIT 1', [hoy])[0];
+    const nro = (!ultimo || ultimo.numero >= 999) ? 1 : ultimo.numero + 1;
     const pin = String(Math.floor(1000 + Math.random() * 9000));
     const ts = new Date().toISOString();
     const qr = `DISPENSARIO|${hoy}|${nro}|${pin}`;

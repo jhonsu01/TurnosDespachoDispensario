@@ -470,7 +470,15 @@ function badgeFormula(t) {
 function pintarTurnos() {
   const texto = $('filtro-texto').value.trim().toLowerCase();
   const filtroEstado = $('filtro-estado').value;
-  const filtrados = turnosCache.filter(t => {
+  // Pendientes de atender primero y, dentro de cada grupo, los más recientes arriba
+  const ACTIVOS = ['LLAMANDO', 'DESPACHO', 'ESPERANDO', 'CREADO'];
+  const ordenados = [...turnosCache].sort((a, b) => {
+    const aAct = ACTIVOS.includes(a.estado) ? 0 : 1;
+    const bAct = ACTIVOS.includes(b.estado) ? 0 : 1;
+    if (aAct !== bAct) return aAct - bAct;
+    return b.id - a.id;
+  });
+  const filtrados = ordenados.filter(t => {
     if (texto && !(
       String(t.numero_documento).toLowerCase().includes(texto) ||
       String(t.paciente_nombre || '').toLowerCase().includes(texto) ||

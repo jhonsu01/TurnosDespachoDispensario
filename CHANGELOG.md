@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.6.0 — 2026-07-10
+
+- **Turnos con los pendientes y más recientes arriba** (Asistente y panel admin):
+  primero los que hay que atender (llamando/despacho/esperando) y dentro de cada
+  grupo los más nuevos, sin tener que desplazarse hacia abajo.
+- **Contador de turnos**: sigue reiniciando en 001 cada día y ahora, si una
+  jornada llega al turno 999, continúa de nuevo en 001 sin finalizar el día.
+- **App despachador: buscador de medicamentos arriba** — el campo y sus
+  resultados quedan en la parte superior y la pantalla se reajusta con el
+  teclado abierto (`adjustResize`): ya no hay que cerrar el teclado para
+  seleccionar el medicamento.
+- **Zoom de la fórmula en el celular**: tocar la imagen la abre a pantalla
+  completa con **zoom de pellizco** (1x–6x) y arrastre, para leerla sin OCR.
+
 ## v0.5.1 — 2026-07-10
 
 - **App del paciente: hora local en el comprobante.** La fecha de entrega llegaba
