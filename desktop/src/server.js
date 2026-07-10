@@ -388,6 +388,8 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
     const normal = (Array.isArray(items) ? items : []).map(i => ({
       medicamento_id: Number(i.medicamento_id),
       cantidad: Number(i.cantidad) > 0 ? Math.round(Number(i.cantidad)) : 0,
+      pendiente: Number(i.pendiente) > 0 ? Math.round(Number(i.pendiente)) : 0,   // saldo que queda por falta de stock
+      pendiente_id: Number(i.pendiente_id) > 0 ? Number(i.pendiente_id) : null,   // entrega contra un pendiente previo
     })).filter(i => i.medicamento_id && i.cantidad > 0);
     try {
       const comprobante = db.registrarEntrega(Number(turno_id), normal, usuario || actorDe(req), modulo);
@@ -400,6 +402,15 @@ async function crearServidor({ dbPath, puerto = 3000 }) {
   });
 
   app.get('/api/entregas', conToken(), (req, res) => res.json(db.getEntregas()));
+
+  // Saldos pendientes de un paciente (entregas parciales por falta de stock)
+  app.get('/api/pendientes', conToken('despachador'), (req, res) => {
+    const { tipo_documento, numero_documento } = req.query;
+    if (!TIPOS_DOC.includes(tipo_documento) || !numero_documento) {
+      return res.status(400).json({ error: 'tipo_documento y numero_documento son obligatorios' });
+    }
+    res.json(db.getPendientesDePaciente(tipo_documento, String(numero_documento)));
+  });
 
   // El paciente consulta su comprobante (sin token: es su propio turno)
   app.get('/api/entregas/:turno_id', (req, res) => {

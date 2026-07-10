@@ -79,6 +79,17 @@ CREATE TABLE IF NOT EXISTS dispositivos (
   ultimo_acceso TEXT,
   activo INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS pendientes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  paciente_id INTEGER NOT NULL REFERENCES pacientes(id),
+  medicamento_id INTEGER NOT NULL REFERENCES medicamentos(id),
+  cantidad INTEGER NOT NULL,
+  origen TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE','SALDADO')),
+  fecha TEXT NOT NULL,
+  fecha_saldado TEXT,
+  saldado_por TEXT
+);
 CREATE TABLE IF NOT EXISTS auditoria (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   fecha TEXT NOT NULL,
@@ -560,6 +571,8 @@ class Db {
         codigo: med.codigo,
         nombre: `${med.nombre} ${med.concentracion} (${med.presentacion})`,
         cantidad: it.cantidad,
+        pendiente: Number(it.pendiente) > 0 ? Math.round(Number(it.pendiente)) : 0,
+        pendiente_id: Number(it.pendiente_id) > 0 ? Number(it.pendiente_id) : null,
         lotes,
       };
     });
@@ -588,6 +601,19 @@ class Db {
       .update(json).digest('hex');
     this.run('INSERT INTO entregas (turno_id, codigo, json, firma, usuario, fecha, modulo) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [turno_id, codigo, json, firma, usuario, comprobante.fecha, moduloEntrega]);
+
+    // Saldos pendientes: lo que faltó por stock queda registrado a nombre del
+    // paciente, y las entregas contra un pendiente existente lo reducen/saldan.
+    for (const d of detalle) {
+      if (d.pendiente_id) this.descontarPendiente(d.pendiente_id, d.cantidad, usuario);
+      if (d.pendiente > 0) {
+        this.run(
+          `INSERT INTO pendientes (paciente_id, medicamento_id, cantidad, origen, fecha)
+           VALUES (?, ?, ?, ?, ?)`,
+          [turno.paciente_id, d.medicamento_id, d.pendiente, codigo, comprobante.fecha]);
+        this.auditar(usuario, 'PENDIENTE_CREADO', `${codigo}: ${d.nombre} x${d.pendiente} (falta de stock)`);
+      }
+    }
     this.setEstadoTurno(turno_id, 'ENTREGADO');
     this.auditar(usuario, 'ENTREGA',
       `${codigo} turno ${turno.numero} (${detalle.length} medicamentos${moduloEntrega ? `, módulo ${moduloEntrega}` : ''})`);
@@ -641,6 +667,37 @@ class Db {
         medicamentos: c.medicamentos.map(m => ({ nombre: m.nombre, cantidad: m.cantidad })),
       };
     });
+  }
+
+  // ---- Saldos pendientes (entregas parciales por falta de stock) ----
+  getPendientesDePaciente(tipo_documento, numero_documento) {
+    return this.query(
+      `SELECT pe.id, pe.cantidad, pe.origen, pe.fecha, pe.medicamento_id,
+              m.nombre, m.concentracion, m.presentacion,
+              COALESCE((SELECT SUM(i.cantidad) FROM inventario i
+                        WHERE i.medicamento_id = m.id AND i.cantidad > 0
+                          AND i.fecha_vencimiento >= date('now')), 0) AS stock
+       FROM pendientes pe
+       JOIN pacientes p ON p.id = pe.paciente_id
+       JOIN medicamentos m ON m.id = pe.medicamento_id
+       WHERE pe.estado = 'PENDIENTE' AND p.tipo_documento = ? AND p.numero_documento = ?
+       ORDER BY pe.fecha`, [tipo_documento, numero_documento]);
+  }
+
+  /** Reduce un pendiente por una entrega; si llega a cero (o menos) queda SALDADO. */
+  descontarPendiente(id, cantidadEntregada, actor = 'panel') {
+    const p = this.query(`SELECT * FROM pendientes WHERE id = ? AND estado = 'PENDIENTE'`, [id])[0];
+    if (!p) return;
+    const restante = p.cantidad - cantidadEntregada;
+    if (restante > 0) {
+      this.run('UPDATE pendientes SET cantidad = ? WHERE id = ?', [restante, id]);
+      this.auditar(actor, 'PENDIENTE_PARCIAL', `pendiente ${id}: quedan ${restante}`);
+    } else {
+      this.run(`UPDATE pendientes SET estado = 'SALDADO', fecha_saldado = ?, saldado_por = ? WHERE id = ?`,
+        [new Date().toISOString(), String(actor), id]);
+      this.auditar(actor, 'PENDIENTE_SALDADO', `pendiente ${id} entregado completo`);
+    }
+    this.save();
   }
 
   // ---- Dashboard ----

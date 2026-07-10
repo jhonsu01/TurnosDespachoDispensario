@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.5.0 — 2026-07-10
+
+### Entregas parciales y saldos pendientes (falta de stock)
+- Al despachar (panel admin y Asistente), cada medicamento tiene ahora columnas
+  **"Entregar"** y **"Queda pendiente"**: si el stock no alcanza lo prescrito, se
+  entrega lo disponible y el resto queda registrado como **saldo pendiente** a
+  nombre del paciente (se sugiere automáticamente según el stock).
+- Cuando el paciente regresa, al abrir su despacho aparece el aviso
+  **"⏳ Este paciente tiene medicamentos pendientes"** con botón *➕ Entregar*
+  que agrega el saldo a la entrega; al confirmarse, el pendiente se reduce o salda.
+- **Consulta de pendientes por documento** en el Asistente (botón "⏳ Consultar
+  pendientes") para saber cuánto se le debe a un paciente sin abrir un turno.
+- El comprobante muestra "⏳ Quedan N pendientes" y todo queda auditado
+  (PENDIENTE_CREADO / PENDIENTE_PARCIAL / PENDIENTE_SALDADO).
+
+### Asistente
+- **Buscador de turnos** (documento, nombre o número) y filtro por estado.
+- Cambio de módulo con botones (window.prompt no existe en Electron).
+
 ## v0.4.1 — 2026-07-10
 
 - **Asistente: la cámara ya funciona al adjuntar fórmulas.** Chromium bloquea

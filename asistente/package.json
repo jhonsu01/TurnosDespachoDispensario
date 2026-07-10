@@ -1,7 +1,7 @@
 {
   "name": "turnos-dispensario-asistente",
   "productName": "Dispensario Asistente",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Módulo de atención para asistentes del dispensario: solo turnos y despacho, conectado por red al servidor principal",
   "main": "src/main.js",
   "author": "Jhon Supelano",

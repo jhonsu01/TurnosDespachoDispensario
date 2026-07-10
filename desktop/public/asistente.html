@@ -86,9 +86,25 @@
       <b>Turnos de hoy</b>
       <div>
         <button class="accion primario" onclick="abrirNuevoTurno()">+ Asignar turno</button>
-        <button class="accion" onclick="cambiarModulo()">Módulo <span id="mi-modulo"></span> ▾</button>
+        <button class="accion" onclick="abrirPendientes()">⏳ Consultar pendientes</button>
+        <button class="accion" onclick="abrirCambioModulo()">Módulo <span id="mi-modulo"></span> ▾</button>
         <button class="accion peligro" onclick="salir()">Salir</button>
       </div>
+    </div>
+    <div class="card" style="display:flex;gap:.8rem;flex-wrap:wrap;align-items:end;">
+      <div class="campo" style="flex:1;min-width:180px;"><label>🔍 Buscar (documento, nombre o Nº)</label>
+        <input id="filtro-texto" placeholder="Ej: 1121888926 o 006" oninput="pintarTurnos()"></div>
+      <div class="campo"><label>Estado</label>
+        <select id="filtro-estado" onchange="pintarTurnos()">
+          <option value="">Todos</option>
+          <option value="ESPERANDO">Esperando</option>
+          <option value="LLAMANDO">Llamando</option>
+          <option value="DESPACHO">En despacho</option>
+          <option value="ENTREGADO">Entregado</option>
+          <option value="FINALIZADO">Finalizado</option>
+          <option value="NO_PRESENTADO">No presentado</option>
+        </select></div>
+      <button class="accion" onclick="$('filtro-texto').value='';$('filtro-estado').value='';pintarTurnos()">Limpiar</button>
     </div>
     <table>
       <thead><tr><th>Turno</th><th>Paciente</th><th>Fórmula</th><th>Estado</th><th>Módulo</th><th>Acciones</th></tr></thead>
@@ -102,11 +118,13 @@
   <div class="modal">
     <h3>Despacho — Turno <span id="desp-turno-num" class="num"></span></h3>
     <p class="hint" id="desp-paciente"></p>
+    <div id="desp-pendientes"></div>
     <div id="desp-formulas"></div>
     <h4 style="margin-top:1rem;">Medicamentos a entregar</h4>
-    <p class="hint">Toda entrega requiere fórmula. Verifica contra la fórmula física antes de confirmar.</p>
+    <p class="hint">Toda entrega requiere fórmula. Si no hay stock completo, entrega lo disponible y
+      anota en "Queda pendiente" lo que falta: quedará registrado para cuando el paciente regrese.</p>
     <table style="margin-top:.5rem;">
-      <thead><tr><th>Solicitado</th><th>Medicamento</th><th>Stock</th><th>Cantidad</th><th></th></tr></thead>
+      <thead><tr><th>Solicitado</th><th>Medicamento</th><th>Stock</th><th>Entregar</th><th>Queda pendiente</th><th></th></tr></thead>
       <tbody id="desp-items"></tbody>
     </table>
     <div style="margin-top:.6rem;">
@@ -131,6 +149,33 @@
       <tbody id="comp-detalle"></tbody>
     </table>
     <div class="fila-acciones"><button class="accion primario" onclick="cerrarModal('modal-comprobante')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Modal consultar pendientes por documento -->
+<div class="modal-fondo" id="modal-pendientes">
+  <div class="modal">
+    <h3>⏳ Pendientes por entregar</h3>
+    <p class="hint">Consulta cuánto se le debe a un paciente por entregas parciales (falta de stock).</p>
+    <div class="form-grid" style="margin-top:.6rem;">
+      <div class="campo"><label>Tipo de documento</label>
+        <select id="pend-tipo"><option>CC</option><option>CE</option><option>NIT</option><option>PASAPORTE</option><option>TI</option></select></div>
+      <div class="campo"><label>Número de documento</label><input id="pend-doc" inputmode="numeric"></div>
+    </div>
+    <div class="fila-acciones" style="justify-content:flex-start;">
+      <button class="accion primario" onclick="consultarPendientes()">🔍 Consultar</button>
+    </div>
+    <div id="pend-resultado" style="margin-top:.8rem;"></div>
+    <div class="fila-acciones"><button class="accion" onclick="cerrarModal('modal-pendientes')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- Modal cambiar módulo (window.prompt no existe en Electron) -->
+<div class="modal-fondo" id="modal-modulo">
+  <div class="modal" style="width:min(380px,92vw);">
+    <h3>¿En qué módulo vas a atender?</h3>
+    <div id="modulo-botones" style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.6rem;"></div>
+    <div class="fila-acciones"><button class="accion" onclick="cerrarModal('modal-modulo')">Cancelar</button></div>
   </div>
 </div>
 
@@ -225,15 +270,49 @@ function salir() {
   location.reload();
 }
 
-function cambiarModulo() {
-  const m = prompt(`¿En qué módulo vas a atender? (1-${numModulos})`, modulo);
-  const n = Number(m);
-  if (n >= 1 && n <= numModulos) {
-    modulo = n;
-    localStorage.setItem('asistente_modulo', String(n));
-    $('mi-modulo').textContent = n;
-    $('conexion').textContent = `Módulo ${n} · ${nombreAsistente}`;
+// window.prompt() no existe en Electron: selección de módulo con botones
+function abrirCambioModulo() {
+  $('modulo-botones').innerHTML = Array.from({ length: numModulos }, (_, i) =>
+    `<button class="accion ${i + 1 === modulo ? 'primario' : ''}" style="font-size:1.1rem;padding:.7rem 1.3rem;"
+       onclick="fijarModulo(${i + 1})">Módulo ${i + 1}</button>`).join('');
+  $('modal-modulo').classList.add('abierto');
+}
+
+function fijarModulo(n) {
+  modulo = n;
+  localStorage.setItem('asistente_modulo', String(n));
+  $('mi-modulo').textContent = n;
+  $('conexion').textContent = `Módulo ${n} · ${nombreAsistente}`;
+  cerrarModal('modal-modulo');
+}
+
+// ---- Consulta de saldos pendientes (entregas parciales por falta de stock) ----
+function abrirPendientes() {
+  $('pend-doc').value = '';
+  $('pend-resultado').innerHTML = '';
+  $('modal-pendientes').classList.add('abierto');
+}
+
+function htmlPendientes(pendientes, conBotonAgregar) {
+  if (!pendientes.length) {
+    return '<p class="hint">✅ Este paciente no tiene medicamentos pendientes por entregar.</p>';
   }
+  return `<table><thead><tr><th>Medicamento</th><th>Debe</th><th>Stock hoy</th><th>Origen</th><th>Desde</th>${conBotonAgregar ? '<th></th>' : ''}</tr></thead><tbody>` +
+    pendientes.map(p => `<tr>
+      <td>${p.nombre} ${p.concentracion} (${p.presentacion})</td>
+      <td class="num"><b>${p.cantidad}</b></td>
+      <td class="num">${p.stock}</td>
+      <td>${p.origen}</td>
+      <td class="num">${new Date(p.fecha).toLocaleDateString('es-CO')}</td>
+      ${conBotonAgregar ? `<td><button class="accion primario" onclick="agregarPendienteAEntrega(${p.id})">➕ Entregar</button></td>` : ''}
+    </tr>`).join('') + '</tbody></table>';
+}
+
+async function consultarPendientes() {
+  const doc = $('pend-doc').value.trim();
+  if (doc.length < 3) return alert('Escribe el número de documento.');
+  const pendientes = await api(`/api/pendientes?tipo_documento=${$('pend-tipo').value}&numero_documento=${doc}`);
+  $('pend-resultado').innerHTML = htmlPendientes(pendientes, false);
 }
 
 // ---- Turnos ----
@@ -246,7 +325,21 @@ function badgeFormula(t) {
 async function cargarTurnos() {
   if (!token) return;
   turnosCache = await api('/api/turnos');
-  $('cuerpo-turnos').innerHTML = turnosCache.length ? turnosCache.map(t => {
+  pintarTurnos();
+}
+
+function pintarTurnos() {
+  const texto = ($('filtro-texto').value || '').trim().toLowerCase();
+  const filtroEstado = $('filtro-estado').value;
+  const filtrados = turnosCache.filter(t => {
+    if (texto && !(
+      String(t.numero_documento).toLowerCase().includes(texto) ||
+      String(t.paciente_nombre || '').toLowerCase().includes(texto) ||
+      pad(t.numero).includes(texto) || String(t.numero) === texto)) return false;
+    if (filtroEstado) return t.estado === filtroEstado;
+    return true;
+  });
+  $('cuerpo-turnos').innerHTML = filtrados.length ? filtrados.map(t => {
     const acciones = [];
     // Aislamiento por módulo: los turnos llamados/en despacho de OTRO módulo
     // se ven pero no se pueden atender desde aquí (cada asistente atiende su módulo)
@@ -269,7 +362,7 @@ async function cargarTurnos() {
       <td class="num">${t.modulo_asignado ?? '—'}</td>
       <td>${acciones.join('')}</td>
     </tr>`;
-  }).join('') : '<tr><td colspan="6">No hay turnos hoy.</td></tr>';
+  }).join('') : '<tr><td colspan="6">No hay turnos que coincidan.</td></tr>';
 }
 
 async function llamar(id) {
@@ -303,10 +396,12 @@ async function crearTurnoManual() {
 // ---- Despacho ----
 let despachoTurno = null;
 let despachoItems = [];
+let pendientesPaciente = [];
 
 async function abrirDespacho(id) {
   despachoTurno = turnosCache.find(t => t.id === id) || await api(`/api/turnos/${id}`);
   despachoItems = [];
+  pendientesPaciente = [];
   if (despachoTurno.estado === 'LLAMANDO') {
     await api(`/api/turnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: 'DESPACHO' }) });
   }
@@ -316,9 +411,42 @@ async function abrirDespacho(id) {
     (despachoTurno.paciente_nombre ? ` — ${despachoTurno.paciente_nombre}` : '');
   $('desp-buscar').value = '';
   $('desp-resultados').innerHTML = '';
+  await cargarPendientesPaciente();
   await pintarFormulas(id);
   pintarItemsDespacho();
   $('modal-despacho').classList.add('abierto');
+}
+
+/** Si el paciente tiene saldos pendientes de visitas anteriores, se muestran arriba. */
+async function cargarPendientesPaciente() {
+  try {
+    pendientesPaciente = await api(
+      `/api/pendientes?tipo_documento=${despachoTurno.tipo_documento}&numero_documento=${despachoTurno.numero_documento}`);
+  } catch (e) { pendientesPaciente = []; }
+  $('desp-pendientes').innerHTML = pendientesPaciente.length
+    ? `<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:.7rem;margin-bottom:.6rem;">
+        <b>⏳ Este paciente tiene medicamentos pendientes de visitas anteriores:</b>
+        ${htmlPendientes(pendientesPaciente, true)}
+       </div>`
+    : '';
+}
+
+/** Agrega un pendiente a la entrega actual (al confirmar se salda o reduce). */
+function agregarPendienteAEntrega(pendienteId) {
+  const p = pendientesPaciente.find(x => x.id === pendienteId);
+  if (!p) return;
+  if (despachoItems.some(i => i.pendiente_id === p.id)) return alert('Ese pendiente ya está en la entrega.');
+  despachoItems.push({
+    medicamento_id: p.medicamento_id,
+    etiqueta: `${p.nombre} ${p.concentracion} (${p.presentacion})`,
+    stock: p.stock,
+    cantidad: Math.min(p.cantidad, p.stock) || p.cantidad,
+    solicitado: `⏳ pendiente ${p.origen} (debe ${p.cantidad})`,
+    prescrito: p.cantidad,
+    pendiente: Math.max(0, p.cantidad - (Math.min(p.cantidad, p.stock) || p.cantidad)),
+    pendiente_id: p.id,
+  });
+  pintarItemsDespacho();
 }
 
 /** Las imágenes requieren el token: se cargan como blob con el header X-TOKEN. */
@@ -387,9 +515,21 @@ function cargarValidacion(validacion) {
     medicamento_id: v.medicamento_id,
     etiqueta: v.medicamento,
     stock: v.stock,
-    cantidad: v.solicitado.cantidad,
+    // Si el stock no alcanza lo prescrito, se entrega lo disponible y el resto queda pendiente
+    cantidad: v.medicamento_id ? Math.min(v.solicitado.cantidad, v.stock) : v.solicitado.cantidad,
     solicitado: `${v.solicitado.nombre} ${v.solicitado.concentracion}`.trim(),
+    prescrito: v.solicitado.cantidad,
+    pendiente: v.medicamento_id ? Math.max(0, v.solicitado.cantidad - v.stock) : 0,
+    pendiente_id: null,
   }));
+  pintarItemsDespacho();
+}
+
+function cambioCantidad(i, valor) {
+  const it = despachoItems[i];
+  it.cantidad = Number(valor);
+  // Sugerencia automática: lo prescrito menos lo entregado queda pendiente
+  if (it.prescrito) it.pendiente = Math.max(0, it.prescrito - it.cantidad);
   pintarItemsDespacho();
 }
 
@@ -398,10 +538,12 @@ function pintarItemsDespacho() {
     <td>${it.solicitado || '—'}</td>
     <td>${it.medicamento_id ? it.etiqueta : '<span class="badge err">❌ Sin coincidencia</span>'}</td>
     <td class="num">${it.medicamento_id ? it.stock : '—'}</td>
-    <td style="width:90px;"><input type="number" min="1" value="${it.cantidad}"
-      onchange="despachoItems[${i}].cantidad = Number(this.value)"></td>
+    <td style="width:85px;"><input type="number" min="1" value="${it.cantidad}"
+      onchange="cambioCantidad(${i}, this.value)"></td>
+    <td style="width:85px;"><input type="number" min="0" value="${it.pendiente || 0}"
+      onchange="despachoItems[${i}].pendiente = Number(this.value)"></td>
     <td><button class="accion peligro" onclick="despachoItems.splice(${i},1);pintarItemsDespacho()">🗑</button></td>
-  </tr>`).join('') : '<tr><td colspan="5">Sin medicamentos aún. Usa el OCR o el buscador.</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="6">Sin medicamentos aún. Usa el OCR o el buscador.</td></tr>';
 }
 
 function buscarMedDespacho() {
@@ -426,6 +568,9 @@ function agregarDesdeBusqueda(id) {
     stock: m.stock,
     cantidad: 1,
     solicitado: '(manual)',
+    prescrito: 0,
+    pendiente: 0,
+    pendiente_id: null,
   });
   $('desp-buscar').value = '';
   $('desp-resultados').innerHTML = '';
@@ -434,9 +579,23 @@ function agregarDesdeBusqueda(id) {
 
 async function confirmarEntrega() {
   const items = despachoItems.filter(i => i.medicamento_id && i.cantidad > 0)
-    .map(i => ({ medicamento_id: i.medicamento_id, cantidad: i.cantidad }));
+    .map(i => ({
+      medicamento_id: i.medicamento_id,
+      cantidad: i.cantidad,
+      pendiente: i.pendiente || 0,
+      pendiente_id: i.pendiente_id || null,
+    }));
   if (!items.length) return alert('No hay medicamentos válidos para entregar.');
-  if (!confirm(`¿Confirmar la entrega de ${items.length} medicamento(s) desde el módulo ${modulo}?`)) return;
+  const conSaldo = items.filter(i => i.pendiente > 0);
+  let msg = `¿Confirmar la entrega de ${items.length} medicamento(s) desde el módulo ${modulo}?`;
+  if (conSaldo.length) {
+    msg += `\n\n⏳ Quedarán PENDIENTES por falta de stock:\n` +
+      conSaldo.map(i => {
+        const it = despachoItems.find(x => x.medicamento_id === i.medicamento_id && (x.pendiente || 0) === i.pendiente);
+        return `• ${(it && it.etiqueta) || 'medicamento'}: ${i.pendiente} und`;
+      }).join('\n');
+  }
+  if (!confirm(msg)) return;
   const c = await api('/api/entregas', {
     method: 'POST',
     body: JSON.stringify({ turno_id: despachoTurno.id, items, usuario: `asistente:${nombreAsistente}`, modulo }),
@@ -451,7 +610,8 @@ function pintarComprobante(c) {
     `Turno ${pad(c.numero_turno)} · ${c.paciente.tipo_documento} ${c.paciente.numero_documento}` +
     (c.modulo ? ` · módulo ${c.modulo}` : '') + ` · ${new Date(c.fecha).toLocaleString('es-CO')}`;
   $('comp-detalle').innerHTML = c.medicamentos.map(m =>
-    `<tr><td>${m.nombre}</td><td class="num">${m.cantidad}</td></tr>`).join('');
+    `<tr><td>${m.nombre}${m.pendiente > 0 ? `<br><span class="badge warn">⏳ Quedan ${m.pendiente} pendientes</span>` : ''}</td>
+     <td class="num">${m.cantidad}</td></tr>`).join('');
   $('modal-comprobante').classList.add('abierto');
 }
 

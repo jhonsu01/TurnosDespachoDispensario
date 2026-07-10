@@ -304,11 +304,14 @@
   <div class="modal">
     <h3>Despacho — Turno <span id="desp-turno-num" class="num"></span></h3>
     <p class="hint" id="desp-paciente"></p>
+    <div id="desp-pendientes"></div>
     <div id="desp-formulas"></div>
     <h4 style="margin-top:1rem;">Medicamentos a entregar</h4>
-    <p class="hint">Verifica contra la fórmula física antes de confirmar (validación humana obligatoria).</p>
+    <p class="hint">Verifica contra la fórmula física antes de confirmar. Si no hay stock completo,
+      entrega lo disponible y anota en "Queda pendiente" lo que falta: quedará registrado
+      para entregarlo cuando el paciente regrese.</p>
     <table style="margin-top:.5rem;">
-      <thead><tr><th>Solicitado (OCR)</th><th>Medicamento del inventario</th><th>Stock</th><th>Cantidad</th><th></th></tr></thead>
+      <thead><tr><th>Solicitado (OCR)</th><th>Medicamento del inventario</th><th>Stock</th><th>Entregar</th><th>Queda pendiente</th><th></th></tr></thead>
       <tbody id="desp-items"></tbody>
     </table>
     <div style="margin-top:.6rem;display:flex;gap:.5rem;align-items:end;flex-wrap:wrap;">
@@ -538,11 +541,13 @@ async function crearTurnoManual() {
 
 // ---- Despacho ----
 let despachoTurno = null;
-let despachoItems = []; // [{medicamento_id, etiqueta, stock, cantidad, solicitado}]
+let despachoItems = []; // [{medicamento_id, etiqueta, stock, cantidad, solicitado, prescrito, pendiente, pendiente_id}]
+let pendientesPaciente = [];
 
 async function abrirDespacho(id) {
   despachoTurno = turnosCache.find(t => t.id === id) || await api(`/api/turnos/${id}`);
   despachoItems = [];
+  pendientesPaciente = [];
   if (despachoTurno.estado === 'LLAMANDO') {
     await api(`/api/turnos/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: 'DESPACHO' }) });
   }
@@ -552,9 +557,54 @@ async function abrirDespacho(id) {
     (despachoTurno.paciente_nombre ? ` — ${despachoTurno.paciente_nombre}` : '');
   $('desp-agregar-med').innerHTML = medicamentos.map(m =>
     `<option value="${m.id}">${m.nombre} ${m.concentracion} (${m.presentacion}) — stock ${m.stock}</option>`).join('');
+  await cargarPendientesPaciente();
   await pintarFormulas(id);
   pintarItemsDespacho();
   $('modal-despacho').classList.add('abierto');
+}
+
+// ---- Saldos pendientes del paciente (entregas parciales por falta de stock) ----
+function htmlPendientes(pendientes) {
+  return `<table style="margin-top:.4rem;"><thead><tr><th>Medicamento</th><th>Debe</th><th>Stock hoy</th><th>Origen</th><th>Desde</th><th></th></tr></thead><tbody>` +
+    pendientes.map(p => `<tr>
+      <td>${p.nombre} ${p.concentracion} (${p.presentacion})</td>
+      <td class="num"><b>${p.cantidad}</b></td>
+      <td class="num">${p.stock}</td>
+      <td>${p.origen}</td>
+      <td class="num">${new Date(p.fecha).toLocaleDateString('es-CO')}</td>
+      <td><button class="accion primario" onclick="agregarPendienteAEntrega(${p.id})">➕ Entregar</button></td>
+    </tr>`).join('') + '</tbody></table>';
+}
+
+async function cargarPendientesPaciente() {
+  try {
+    pendientesPaciente = await api(
+      `/api/pendientes?tipo_documento=${despachoTurno.tipo_documento}&numero_documento=${despachoTurno.numero_documento}`);
+  } catch (e) { pendientesPaciente = []; }
+  $('desp-pendientes').innerHTML = pendientesPaciente.length
+    ? `<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:.7rem;margin-bottom:.6rem;">
+        <b>⏳ Este paciente tiene medicamentos pendientes de visitas anteriores:</b>
+        ${htmlPendientes(pendientesPaciente)}
+       </div>`
+    : '';
+}
+
+function agregarPendienteAEntrega(pendienteId) {
+  const p = pendientesPaciente.find(x => x.id === pendienteId);
+  if (!p) return;
+  if (despachoItems.some(i => i.pendiente_id === p.id)) return alert('Ese pendiente ya está en la entrega.');
+  despachoItems.push({
+    medicamento_id: p.medicamento_id,
+    etiqueta: `${p.nombre} ${p.concentracion} (${p.presentacion})`,
+    stock: p.stock,
+    cantidad: Math.min(p.cantidad, p.stock) || p.cantidad,
+    solicitado: `⏳ pendiente ${p.origen} (debe ${p.cantidad})`,
+    prescrito: p.cantidad,
+    pendiente: Math.max(0, p.cantidad - (Math.min(p.cantidad, p.stock) || p.cantidad)),
+    pendiente_id: p.id,
+    disponible: p.stock >= p.cantidad,
+  });
+  pintarItemsDespacho();
 }
 
 function botonAdjuntar(turnoId) {
@@ -618,10 +668,22 @@ function cargarValidacion(validacion) {
     medicamento_id: v.medicamento_id,
     etiqueta: v.medicamento,
     stock: v.stock,
-    cantidad: v.solicitado.cantidad,
+    // Si el stock no alcanza lo prescrito, se entrega lo disponible y el resto queda pendiente
+    cantidad: v.medicamento_id ? Math.min(v.solicitado.cantidad, v.stock) : v.solicitado.cantidad,
     solicitado: `${v.solicitado.nombre} ${v.solicitado.concentracion}`.trim(),
+    prescrito: v.solicitado.cantidad,
+    pendiente: v.medicamento_id ? Math.max(0, v.solicitado.cantidad - v.stock) : 0,
+    pendiente_id: null,
     disponible: v.disponible,
   }));
+  pintarItemsDespacho();
+}
+
+function cambioCantidad(i, valor) {
+  const it = despachoItems[i];
+  it.cantidad = Number(valor);
+  // Sugerencia automática: lo prescrito menos lo entregado queda pendiente
+  if (it.prescrito) it.pendiente = Math.max(0, it.prescrito - it.cantidad);
   pintarItemsDespacho();
 }
 
@@ -632,10 +694,12 @@ function pintarItemsDespacho() {
       ? it.etiqueta
       : '<span class="badge err">❌ No está en el catálogo</span>'}</td>
     <td class="num">${it.medicamento_id ? (it.disponible !== false ? it.stock : `<span class="vencido">${it.stock}</span>`) : '—'}</td>
-    <td style="width:90px;"><input type="number" min="1" value="${it.cantidad}"
-      onchange="despachoItems[${i}].cantidad = Number(this.value)"></td>
+    <td style="width:85px;"><input type="number" min="1" value="${it.cantidad}"
+      onchange="cambioCantidad(${i}, this.value)"></td>
+    <td style="width:85px;"><input type="number" min="0" value="${it.pendiente || 0}"
+      onchange="despachoItems[${i}].pendiente = Number(this.value)"></td>
     <td><button class="accion peligro" onclick="despachoItems.splice(${i},1);pintarItemsDespacho()">🗑</button></td>
-  </tr>`).join('') : '<tr><td colspan="5">Sin medicamentos aún. Usa el OCR o agrégalos manualmente.</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="6">Sin medicamentos aún. Usa el OCR o agrégalos manualmente.</td></tr>';
 }
 
 function agregarMedicamentoAlDespacho(m, cantidad) {
@@ -645,6 +709,9 @@ function agregarMedicamentoAlDespacho(m, cantidad) {
     stock: m.stock,
     cantidad: cantidad || 1,
     solicitado: '(manual)',
+    prescrito: 0,
+    pendiente: 0,
+    pendiente_id: null,
     disponible: true,
   });
   pintarItemsDespacho();
@@ -726,11 +793,21 @@ function cerrarEscaner() {
 
 async function confirmarEntrega() {
   const items = despachoItems.filter(i => i.medicamento_id && i.cantidad > 0)
-    .map(i => ({ medicamento_id: i.medicamento_id, cantidad: i.cantidad }));
+    .map(i => ({
+      medicamento_id: i.medicamento_id,
+      cantidad: i.cantidad,
+      pendiente: i.pendiente || 0,
+      pendiente_id: i.pendiente_id || null,
+    }));
   if (!items.length) return alert('No hay medicamentos válidos para entregar.');
   const sinMatch = despachoItems.filter(i => !i.medicamento_id).length;
-  const msg = `¿Confirmar la entrega de ${items.length} medicamento(s)?` +
+  const conSaldo = despachoItems.filter(i => i.medicamento_id && (i.pendiente || 0) > 0);
+  let msg = `¿Confirmar la entrega de ${items.length} medicamento(s)?` +
     (sinMatch ? `\n(Se omitirán ${sinMatch} ítems sin coincidencia en el catálogo)` : '');
+  if (conSaldo.length) {
+    msg += `\n\n⏳ Quedarán PENDIENTES por falta de stock:\n` +
+      conSaldo.map(i => `• ${i.etiqueta}: ${i.pendiente} und`).join('\n');
+  }
   if (!confirm(msg)) return;
   const comprobante = await api('/api/entregas', {
     method: 'POST',
@@ -751,7 +828,8 @@ function pintarComprobante(c) {
     (c.paciente.nombre ? ` — ${c.paciente.nombre}` : '') +
     ` · ${fechaHora(c.fecha)} · entregó: ${c.entregado_por}`;
   $('comp-detalle').innerHTML = c.medicamentos.map(m => `<tr>
-    <td>${m.nombre}</td><td class="num">${m.cantidad}</td>
+    <td>${m.nombre}${m.pendiente > 0 ? `<br><span class="badge warn">⏳ Quedan ${m.pendiente} pendientes</span>` : ''}</td>
+    <td class="num">${m.cantidad}</td>
     <td class="hint">${m.lotes.map(l => `${l.lote} (x${l.cantidad}, vence ${l.fecha_vencimiento})`).join('<br>')}</td>
   </tr>`).join('');
   $('comp-firma').textContent = `Firma HMAC-SHA256: ${(c.firma || '').slice(0, 32)}…`;

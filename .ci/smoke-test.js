@@ -171,7 +171,50 @@ async function main() {
     assert.strictEqual(formulas2.data[0].num_paginas, 3, 'fórmula de 3 páginas');
     console.log('✓ fórmula multipágina (PDF)');
 
-    // 10d. Rol inventario reconocido en emparejamiento (PIN inválido → 401, no 400)
+    // 10d. Entrega parcial por falta de stock: crea un saldo pendiente
+    await api(`/api/turnos/${turno2.data.id}/estado`, {
+      method: 'PUT', body: JSON.stringify({ estado: 'LLAMANDO', modulo_asignado: 1 }),
+    });
+    const parcial = await api('/api/entregas', {
+      method: 'POST',
+      body: JSON.stringify({
+        turno_id: turno2.data.id,
+        items: [{ medicamento_id: losartan.id, cantidad: 20, pendiente: 15 }],
+        usuario: 'smoke-test', modulo: 1,
+      }),
+    });
+    assert.strictEqual(parcial.status, 201);
+    assert.strictEqual(parcial.data.medicamentos[0].pendiente, 15, 'comprobante registra el pendiente');
+    const pend1 = await api('/api/pendientes?tipo_documento=CC&numero_documento=40389928');
+    assert.strictEqual(pend1.data.length, 1);
+    assert.strictEqual(pend1.data[0].cantidad, 15, 'pendiente de 15 unidades registrado');
+    console.log('✓ entrega parcial crea saldo pendiente');
+
+    // 10e. El paciente regresa: nueva entrega salda el pendiente
+    await api(`/api/turnos/${turno2.data.id}/finalizar`, { method: 'POST' });
+    const turno3 = await api('/api/turnos', {
+      method: 'POST',
+      body: JSON.stringify({ tipo_documento: 'CC', numero_documento: '40389928' }),
+    });
+    assert.notStrictEqual(turno3.data.id, turno2.data.id, 'nuevo turno tras finalizar');
+    await api('/api/formulas', {
+      method: 'POST',
+      body: JSON.stringify({ turno_id: turno3.data.id, imagen_base64: imagenFake }),
+    });
+    const saldo = await api('/api/entregas', {
+      method: 'POST',
+      body: JSON.stringify({
+        turno_id: turno3.data.id,
+        items: [{ medicamento_id: losartan.id, cantidad: 15, pendiente_id: pend1.data[0].id }],
+        usuario: 'smoke-test', modulo: 1,
+      }),
+    });
+    assert.strictEqual(saldo.status, 201);
+    const pend2 = await api('/api/pendientes?tipo_documento=CC&numero_documento=40389928');
+    assert.strictEqual(pend2.data.length, 0, 'pendiente saldado al entregar el resto');
+    console.log('✓ entrega posterior salda el pendiente');
+
+    // 10f. Rol inventario reconocido en emparejamiento (PIN inválido → 401, no 400)
     const inv = await api('/api/emparejar', {
       method: 'POST',
       body: JSON.stringify({ rol: 'inventario', pin: '000000', nombre: 'test' }),
@@ -189,8 +232,8 @@ async function main() {
 
     // 12. Dashboard y auditoría
     const dash = await api('/api/dashboard');
-    assert.strictEqual(dash.data.turnos_hoy, 2);
-    assert.strictEqual(dash.data.atendidos, 1);
+    assert.strictEqual(dash.data.turnos_hoy, 3);
+    assert.strictEqual(dash.data.atendidos, 3);
     const audit = await api('/api/auditoria');
     assert.ok(audit.data.some(a => a.accion === 'ENTREGA'), 'entrega auditada');
     console.log('✓ dashboard + auditoría');
