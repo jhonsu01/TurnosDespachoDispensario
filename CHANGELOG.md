@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.7.0 — 2026-07-10
+
+### Dos APKs nuevos dedicados al kiosko (6 binarios por release)
+- **`TurnosDispensario-KioskoTV-vX.apk`**: solo la pantalla del turnero para el TV.
+- **`TurnosDispensario-Autoservicio-vX.apk`**: solo el punto de turnos táctil (tablet).
+- **El PIN se pide UNA sola vez**: el emparejamiento queda guardado y al encender
+  el equipo la app entra directo a su pantalla, sin configurar nada. Solo vuelve
+  a pedir PIN si el administrador **revoca el dispositivo** desde el panel
+  (Configuración → Dispositivos emparejados), que es cuando se usa el PIN nuevo.
+- **Autoarranque al encender**: la app se abre sola al reiniciar el TV/tablet
+  (receiver de arranque). En algunos equipos hay que permitir el "autoarranque"
+  o "mostrar sobre otras apps" la primera vez.
+- Sin selección de roles ni diálogos: la página (turnero o autoservicio) va fija
+  en cada APK.
+
 ## v0.6.0 — 2026-07-10
 
 - **Turnos con los pendientes y más recientes arriba** (Asistente y panel admin):

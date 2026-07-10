@@ -137,6 +137,12 @@ class MainActivity : AppCompatActivity() {
             findViewById<Button>(R.id.btnCambiarServidor).text = "Cambiar servidor"
             findViewById<Button>(R.id.btnVolverRol).visibility = View.GONE
         }
+        // APKs de kiosko dedicados: rol fijo, página fija y sin selección de roles
+        if (esKioskoDedicado()) {
+            prefs.edit().putString("kiosko_pagina",
+                if (BuildConfig.MODO_FIJO == "kiosko_tv") "display.html" else "kiosko.html").apply()
+            findViewById<Button>(R.id.btnVolverRol).visibility = View.GONE
+        }
 
         restaurarSesion()
     }
@@ -150,10 +156,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Al volver del kiosko con el rol borrado, regresar a la selección
+        // Al volver del kiosko con el rol borrado, regresar a la pantalla inicial
+        // (en los APKs dedicados: la configuración/PIN, no la selección de roles)
         if (rolElegido == "kiosko" && prefs.getString("rol", null) == null) {
-            mostrarVista(R.id.vistaRol)
             rolElegido = null
+            irAVistaInicial()
         }
     }
 
@@ -198,17 +205,35 @@ class MainActivity : AppCompatActivity() {
         ui.post(t)
     }
 
+    /** APK dedicado de kiosko (TV o autoservicio): rol kiosko fijo. */
+    private fun esKioskoDedicado(): Boolean =
+        BuildConfig.MODO_FIJO == "kiosko_tv" || BuildConfig.MODO_FIJO == "autoservicio"
+
+    /** Rol forzado por el flavor del APK, o null si es la app completa. */
+    private fun rolFijo(): String? = when {
+        BuildConfig.SOLO_PACIENTE -> "paciente"
+        esKioskoDedicado() -> "kiosko"
+        else -> null
+    }
+
+    private fun irAVistaInicial() {
+        val fijo = rolFijo()
+        if (fijo != null) elegirRol(fijo) else mostrarVista(R.id.vistaRol)
+    }
+
     private fun cambiarRol() {
         prefs.edit().remove("rol").remove("turno_id").apply()
         rolElegido = null
-        if (BuildConfig.SOLO_PACIENTE) elegirRol("paciente") else mostrarVista(R.id.vistaRol)
+        irAVistaInicial()
     }
 
     private fun restaurarSesion() {
-        val rol = if (BuildConfig.SOLO_PACIENTE) "paciente" else prefs.getString("rol", null)
+        val rol = rolFijo() ?: prefs.getString("rol", null)
         val host = prefs.getString("host", null)
-        if (rol == null || host == null) {
-            if (BuildConfig.SOLO_PACIENTE) elegirRol("paciente") else mostrarVista(R.id.vistaRol)
+        // Los kioskos dedicados exigen además el token del emparejamiento (PIN una sola vez)
+        if (rol == null || host == null ||
+            (esKioskoDedicado() && prefs.getString("token", null) == null)) {
+            irAVistaInicial()
             return
         }
         rolElegido = rol
@@ -327,7 +352,10 @@ class MainActivity : AppCompatActivity() {
                     estadoConexion("Conectado a ${resultado.optString("nombre_centro", "servidor")} · rol: $rol")
                     toast("Dispositivo emparejado ✓")
                     when (rol) {
-                        "kiosko" -> elegirPantallaKiosko()
+                        // En los APKs dedicados la página ya está fija: entrar directo
+                        "kiosko" -> if (esKioskoDedicado())
+                            startActivity(Intent(this, KioskActivity::class.java))
+                        else elegirPantallaKiosko()
                         "despachador" -> entrarDespacho()
                         "inventario" -> entrarInventario()
                     }

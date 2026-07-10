@@ -11,29 +11,47 @@ android {
         applicationId "com.dispensario.turnos"
         minSdk 24
         targetSdk 35
-        versionCode 8
-        versionName "0.6.0"
+        versionCode 9
+        versionName "0.7.0"
     }
 
     buildFeatures {
         buildConfig true
     }
 
-    // Dos APKs desde el mismo código:
+    // Cuatro APKs desde el mismo código (MODO_FIJO define el comportamiento):
     //  - staff: app completa (despachador, inventario, kiosko y también paciente)
     //  - paciente: solo el rol paciente, sin selección de roles ni datos técnicos
+    //  - kioskotv: solo la pantalla del turnero en TV, con autoarranque al encender
+    //  - autoservicio: solo el punto de turnos táctil (tablet), con autoarranque
     flavorDimensions = ["modo"]
     productFlavors {
         staff {
             dimension "modo"
             resValue "string", "app_name", "Turnos Dispensario"
             buildConfigField "boolean", "SOLO_PACIENTE", "false"
+            buildConfigField "String", "MODO_FIJO", '""'
         }
         paciente {
             dimension "modo"
             applicationId "com.dispensario.turnos.paciente"
             resValue "string", "app_name", "Dispensario Paciente"
             buildConfigField "boolean", "SOLO_PACIENTE", "true"
+            buildConfigField "String", "MODO_FIJO", '"paciente"'
+        }
+        kioskotv {
+            dimension "modo"
+            applicationId "com.dispensario.turnos.kioskotv"
+            resValue "string", "app_name", "Dispensario Kiosko TV"
+            buildConfigField "boolean", "SOLO_PACIENTE", "false"
+            buildConfigField "String", "MODO_FIJO", '"kiosko_tv"'
+        }
+        autoservicio {
+            dimension "modo"
+            applicationId "com.dispensario.turnos.autoservicio"
+            resValue "string", "app_name", "Dispensario Autoservicio"
+            buildConfigField "boolean", "SOLO_PACIENTE", "false"
+            buildConfigField "String", "MODO_FIJO", '"autoservicio"'
         }
     }
 
