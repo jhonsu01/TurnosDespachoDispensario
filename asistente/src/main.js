@@ -30,6 +30,28 @@ function guardarServidor(ip, puerto) {
   } catch (e) { /* no crítico */ }
 }
 
+// Chromium desactiva la cámara (navigator.mediaDevices) en orígenes http que no
+// sean localhost. El panel admin corre en 127.0.0.1 y no lo sufre, pero el
+// asistente carga http://IP-del-servidor: se marca ese origen como seguro ANTES
+// de que arranque Chromium. Si el servidor cambia, se guarda y se relanza una vez.
+const servidorInicial = leerServidorGuardado();
+let origenSeguro = servidorInicial ? `http://${servidorInicial.ip}:${servidorInicial.puerto}` : null;
+if (origenSeguro) {
+  app.commandLine.appendSwitch('unsafely-treat-insecure-origin-as-secure', origenSeguro);
+}
+
+/** Carga la app del servidor; si su origen aún no está marcado como seguro, relanza. */
+function cargarServidor(ip, puerto) {
+  guardarServidor(ip, puerto);
+  const origen = `http://${ip}:${puerto}`;
+  if (origen !== origenSeguro) {
+    app.relaunch();
+    app.exit(0);
+    return;
+  }
+  win.loadURL(`${origen}/asistente.html`);
+}
+
 /** Busca el servidor por broadcast UDP ("DISPENSARIO_DISCOVER" → puerto 18400). */
 function descubrirServidor(timeoutMs = 4000) {
   return new Promise((resolve) => {
@@ -89,8 +111,7 @@ async function conectarYCargar() {
   if (guardado) candidatos.push(guardado);
   for (const c of candidatos) {
     if (await probarServidor(c.ip, c.puerto)) {
-      guardarServidor(c.ip, c.puerto);
-      win.loadURL(`http://${c.ip}:${c.puerto}/asistente.html`);
+      cargarServidor(c.ip, c.puerto);
       return;
     }
   }
@@ -100,18 +121,14 @@ async function conectarYCargar() {
 // La pantalla de conexión manual valida la IP a través del proceso principal
 ipcMain.handle('conectar', async (_ev, ip, puerto) => {
   const ok = await probarServidor(ip, puerto);
-  if (ok) {
-    guardarServidor(ip, puerto);
-    win.loadURL(`http://${ip}:${puerto}/asistente.html`);
-  }
+  if (ok) cargarServidor(ip, puerto);
   return ok;
 });
 
 ipcMain.handle('reintentar-descubrir', async () => {
   const d = await descubrirServidor();
   if (d && await probarServidor(d.ip, d.puerto)) {
-    guardarServidor(d.ip, d.puerto);
-    win.loadURL(`http://${d.ip}:${d.puerto}/asistente.html`);
+    cargarServidor(d.ip, d.puerto);
     return true;
   }
   return false;

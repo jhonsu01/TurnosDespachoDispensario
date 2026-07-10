@@ -556,8 +556,18 @@ class MainActivity : AppCompatActivity() {
                     val sb = StringBuilder()
                     for (i in 0 until entregas.length()) {
                         val e = entregas.getJSONObject(i)
-                        sb.append("🧾 ${e.getString("codigo")} — turno %03d (%s)\n".format(
-                            e.getInt("numero_turno"), e.optString("fecha_turno", "")))
+                        sb.append("🧾 ${e.getString("codigo")} — turno %03d\n".format(e.getInt("numero_turno")))
+                        // Fecha y hora locales de la entrega
+                        val fechaIso = e.optString("fecha", "")
+                        val fechaLegible = try {
+                            val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                            parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                            val fecha = parser.parse(fechaIso.substring(0, 19))
+                            java.text.SimpleDateFormat("dd/MM/yyyy h:mm a", java.util.Locale("es")).format(fecha!!)
+                        } catch (ex: Exception) {
+                            e.optString("fecha_turno", "")
+                        }
+                        sb.append("📅 Entregado: $fechaLegible\n")
                         val meds = e.getJSONArray("medicamentos")
                         for (j in 0 until meds.length()) {
                             val m = meds.getJSONObject(j)

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.4.1 — 2026-07-10
+
+- **Asistente: la cámara ya funciona al adjuntar fórmulas.** Chromium bloquea
+  `navigator.mediaDevices` en orígenes http remotos; el Asistente ahora marca el
+  origen del servidor como seguro al arrancar (y se relanza una sola vez cuando
+  se conecta a un servidor nuevo).
+- **App del paciente: el historial de entregas muestra la fecha y hora** en que
+  se entregó cada fórmula (antes solo aparecía la fecha del turno).
+
 ## v0.4.0 — 2026-07-09
 
 ### Correcciones

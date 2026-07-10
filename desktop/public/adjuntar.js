@@ -93,6 +93,10 @@ const AdjuntarFormula = (() => {
   }
 
   async function abrirCamara() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      msg('La cámara no está disponible en esta ventana. Actualiza la app Asistente a la última versión y ábrela de nuevo.');
+      return;
+    }
     document.getElementById('adj-zona-camara').style.display = 'block';
     try {
       await iniciarStream(null);
