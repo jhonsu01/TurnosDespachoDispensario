@@ -107,3 +107,13 @@ git tag v0.2.0 && git push origin v0.2.0
 ## Licencia
 
 MIT — © Jhon Supelano
+
+---
+
+## Apoya el proyecto
+
+Repositorio: https://github.com/jhonsu01/TurnosDespachoDispensario
+
+Si este proyecto te resulta útil, puedes apoyar su desarrollo con una donación:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/V7V81LV7GX)

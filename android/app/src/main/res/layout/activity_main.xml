@@ -83,6 +83,34 @@
                 android:backgroundTint="@color/panel"
                 android:textColor="@color/texto"
                 android:text="@string/rol_kiosko" />
+
+            <!-- Apoyo / donaciones (solo visible en el APK del personal) -->
+            <LinearLayout
+                android:id="@+id/bloqueKofi"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_marginTop="28dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/kofi_texto"
+                    android:textColor="@color/gris"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:layout_marginBottom="8dp" />
+
+                <Button
+                    android:id="@+id/btnKofi"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="@color/cian"
+                    android:textColor="@color/fondo"
+                    android:text="@string/kofi_boton" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- ============ VISTA 1: CONEXIÓN ============ -->

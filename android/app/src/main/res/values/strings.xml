@@ -27,6 +27,8 @@
     <string name="titulo_inventario">Inventario del dispensario</string>
     <string name="btn_agregar_medicamento">＋ Agregar medicamento</string>
     <string name="hint_buscar_med">🔍 Buscar medicamento…</string>
+    <string name="kofi_texto">¿Te resulta útil este sistema?\nApoya su desarrollo:</string>
+    <string name="kofi_boton">☕ Apóyame en Ko-fi</string>
     <string name="titulo_despacho">Turnos del dispensario</string>
     <string name="btn_ocr">🤖 Leer fórmula con IA (OCR)</string>
     <string name="btn_entregar">✅ Confirmar entrega</string>

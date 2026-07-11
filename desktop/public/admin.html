@@ -89,6 +89,7 @@
   <button data-tab="entregas">Entregas</button>
   <button data-tab="auditoria">Auditoría</button>
   <button data-tab="config">Configuración</button>
+  <button data-tab="acerca">Acerca de</button>
 </nav>
 <main>
   <!-- ============ DASHBOARD ============ -->
@@ -295,6 +296,25 @@
     <div class="card">
       <b>Conexión de la app Android</b>
       <p class="hint" id="instrucciones-app">…</p>
+    </div>
+  </div>
+
+  <!-- ============ ACERCA DE ============ -->
+  <div class="tab" id="tab-acerca">
+    <div class="card" style="text-align:center;">
+      <div style="font-size:2.4rem;">💊</div>
+      <h2 style="margin:.3rem 0;">Turnos Dispensario</h2>
+      <p class="hint">Sistema de turnos y despacho de medicamentos con OCR de fórmulas,
+        inventario FEFO y funcionamiento en red local.</p>
+      <p style="margin-top:.6rem;">Versión <b id="acerca-version">—</b> · © Jhon Supelano · Licencia MIT</p>
+      <p style="margin-top:.4rem;">Repositorio:
+        <a href="https://github.com/jhonsu01/TurnosDespachoDispensario" target="_blank">github.com/jhonsu01/TurnosDespachoDispensario</a></p>
+      <div style="margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid var(--borde);">
+        <p class="hint">¿Te resulta útil este sistema? Apoya su desarrollo:</p>
+        <a href="https://ko-fi.com/V7V81LV7GX" target="_blank" style="display:inline-block;margin-top:.6rem;">
+          <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Apóyame en Ko-fi" style="height:36px;">
+        </a>
+      </div>
     </div>
   </div>
 </main>
@@ -1132,6 +1152,11 @@ function conectarWS() {
   };
   ws.onclose = () => setTimeout(conectarWS, 3000);
 }
+
+// Versión (para la pestaña "Acerca de")
+fetch('/api/ping').then(r => r.json()).then(d => {
+  if (d.version) $('acerca-version').textContent = d.version;
+}).catch(() => {});
 
 cargarConfig(); cargarMedicamentos(); cargarInventario(); cargarTurnos(); cargarDashboard(); conectarWS();
 setInterval(cargarTurnos, 20000);

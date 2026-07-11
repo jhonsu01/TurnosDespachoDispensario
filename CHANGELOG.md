@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.7.1 — 2026-07-10
+
+- **Apoyo / donaciones (Ko-fi)**: botón en el README (con la URL del repositorio),
+  en la pantalla de inicio del APK del personal, y en una nueva pestaña
+  **"Acerca de"** del panel de administración (MSI) y del Asistente (MSI).
+  No aparece en los APKs Paciente, Kiosko TV ni Autoservicio.
+- La pestaña "Acerca de" muestra la versión, el repositorio y la licencia.
+
 ## v0.7.0 — 2026-07-10
 
 ### Dos APKs nuevos dedicados al kiosko (6 binarios por release)

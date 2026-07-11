@@ -88,6 +88,7 @@
         <button class="accion primario" onclick="abrirNuevoTurno()">+ Asignar turno</button>
         <button class="accion" onclick="abrirPendientes()">⏳ Consultar pendientes</button>
         <button class="accion" onclick="abrirCambioModulo()">Módulo <span id="mi-modulo"></span> ▾</button>
+        <button class="accion" onclick="$('modal-acerca').classList.add('abierto')">Acerca de</button>
         <button class="accion peligro" onclick="salir()">Salir</button>
       </div>
     </div>
@@ -114,6 +115,25 @@
     </table>
   </div>
 </main>
+
+<!-- Modal Acerca de -->
+<div class="modal-fondo" id="modal-acerca">
+  <div class="modal" style="text-align:center;width:min(460px,92vw);">
+    <div style="font-size:2.4rem;">💊</div>
+    <h3 style="margin:.3rem 0;">Turnos Dispensario — Módulo de atención</h3>
+    <p class="hint">Cliente de despacho para los módulos del dispensario.</p>
+    <p style="margin-top:.6rem;">Versión <b id="acerca-version">—</b> · © Jhon Supelano · Licencia MIT</p>
+    <p style="margin-top:.4rem;">Repositorio:
+      <a href="https://github.com/jhonsu01/TurnosDespachoDispensario" target="_blank">github.com/jhonsu01/TurnosDespachoDispensario</a></p>
+    <div style="margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid var(--borde);">
+      <p class="hint">¿Te resulta útil este sistema? Apoya su desarrollo:</p>
+      <a href="https://ko-fi.com/V7V81LV7GX" target="_blank" style="display:inline-block;margin-top:.6rem;">
+        <img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Apóyame en Ko-fi" style="height:36px;">
+      </a>
+    </div>
+    <div class="fila-acciones"><button class="accion" onclick="cerrarModal('modal-acerca')">Cerrar</button></div>
+  </div>
+</div>
 
 <!-- Modal despacho -->
 <div class="modal-fondo" id="modal-despacho">
@@ -647,6 +667,9 @@ function conectarWS() {
 }
 
 // ---- Arranque: si ya hay token vigente, entrar directo ----
+fetch('/api/ping').then(r => r.json()).then(d => {
+  if (d.version) $('acerca-version').textContent = d.version;
+}).catch(() => {});
 cargarModulos();
 if (token) {
   fetch('/api/ping', { headers: { 'X-TOKEN': token } }).then(r => r.json()).then(d => {

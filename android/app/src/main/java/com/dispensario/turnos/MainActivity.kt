@@ -137,6 +137,15 @@ class MainActivity : AppCompatActivity() {
             findViewById<Button>(R.id.btnCambiarServidor).text = "Cambiar servidor"
             findViewById<Button>(R.id.btnVolverRol).visibility = View.GONE
         }
+        // Apoyo Ko-fi: solo en el APK del personal (staff), no en paciente/kiosko/autoservicio
+        if (BuildConfig.MODO_FIJO.isEmpty()) {
+            findViewById<View>(R.id.bloqueKofi).visibility = View.VISIBLE
+            findViewById<Button>(R.id.btnKofi).setOnClickListener {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://ko-fi.com/V7V81LV7GX")))
+                } catch (e: Exception) { toast("No se pudo abrir el enlace") }
+            }
+        }
         // APKs de kiosko dedicados: rol fijo, página fija y sin selección de roles
         if (esKioskoDedicado()) {
             prefs.edit().putString("kiosko_pagina",
